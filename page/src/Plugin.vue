@@ -334,7 +334,7 @@ const fetchSystemData = async () => {
       method: 'POST',
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        command: '/bin/sh',
+        command: 'sh',
         args: ['-c', "cat /proc/loadavg; echo '---MEM---'; cat /proc/meminfo; echo '---CPU---'; grep '^cpu' /proc/stat; echo '---PS---'; ps -eo pid,user:15,%cpu,%mem,vsz,rss,stat,comm --sort=-%cpu --no-headers"],
         timeout: 8,
         parse_json: false,
