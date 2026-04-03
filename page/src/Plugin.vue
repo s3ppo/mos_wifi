@@ -328,25 +328,29 @@ const fetchSettings = async () => {
   }
 };
 
+const query = async (command, args) => {
+  const res = await fetch('/api/v1/mos/plugins/query', {
+    method: 'POST',
+    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ command, args, timeout: 8, parse_json: false }),
+  });
+  if (!res.ok) throw new Error(`query failed: ${res.status}`);
+  const data = await res.json();
+  return typeof data.output === 'string' ? data.output : JSON.stringify(data.output);
+};
+
 const fetchSystemData = async () => {
   try {
-    const res = await fetch('/api/v1/mos/plugins/query', {
-      method: 'POST',
-      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        command: 'sh',
-        args: ['-c', "cat /proc/loadavg; echo '---MEM---'; cat /proc/meminfo; echo '---CPU---'; grep '^cpu' /proc/stat; echo '---PS---'; ps -eo pid,user:15,%cpu,%mem,vsz,rss,stat,comm --sort=-%cpu --no-headers"],
-        timeout: 8,
-        parse_json: false,
-      }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      const output = typeof data.output === 'string' ? data.output : JSON.stringify(data.output);
-      const { data: parsed, cpuStats } = parseSystemData(output, prevCpuStats.value);
-      prevCpuStats.value = cpuStats;
-      sysData.value = parsed;
-    }
+    const [loadavg, meminfo, cpustat, psout] = await Promise.all([
+      query('cat', ['/proc/loadavg']),
+      query('cat', ['/proc/meminfo']),
+      query('cat', ['/proc/stat']),
+      query('ps', ['-eo', 'pid,user:15,%cpu,%mem,vsz,rss,stat,comm', '--sort=-%cpu', '--no-headers']),
+    ]);
+    const combined = loadavg + '---MEM---\n' + meminfo + '---CPU---\n' + cpustat + '---PS---\n' + psout;
+    const { data: parsed, cpuStats } = parseSystemData(combined, prevCpuStats.value);
+    prevCpuStats.value = cpuStats;
+    sysData.value = parsed;
   } catch (e) {
     console.error('Failed to fetch system data:', e);
   }
