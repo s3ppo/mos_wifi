@@ -148,6 +148,7 @@ const loading = ref(true);
 const settings = ref({ interval: 2, maxProcesses: 50 });
 const sysData = ref(null);
 const sortField = ref('cpu');
+const prevCpuStats = ref(null);
 let pollInterval = null;
 
 const settingsDialog = reactive({
@@ -200,78 +201,114 @@ const setSortField = (field) => {
   sortField.value = field;
 };
 
-const parseTopOutput = (output) => {
-  const lines = output.split('\n');
-  const result = { header: null, tasks: null, cpus: [], mem: null, swap: null, processes: [] };
-  let inProcessSection = false;
+const parseCpuStat = (line) => {
+  const p = line.trim().split(/\s+/);
+  return {
+    user: parseInt(p[1]) || 0,
+    nice: parseInt(p[2]) || 0,
+    system: parseInt(p[3]) || 0,
+    idle: parseInt(p[4]) || 0,
+    iowait: parseInt(p[5]) || 0,
+    irq: parseInt(p[6]) || 0,
+    softirq: parseInt(p[7]) || 0,
+    steal: parseInt(p[8]) || 0,
+  };
+};
 
-  for (const line of lines) {
-    if (line.startsWith('top -')) {
-      const loadMatch = line.match(/load average:\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)/);
-      const uptimeMatch = line.match(/up (.+?),\s*\d+ user/);
-      result.header = {
-        uptime: uptimeMatch ? uptimeMatch[1].trim() : '',
-        load1: loadMatch ? parseFloat(loadMatch[1]) : 0,
-        load5: loadMatch ? parseFloat(loadMatch[2]) : 0,
-        load15: loadMatch ? parseFloat(loadMatch[3]) : 0,
-      };
-    } else if (line.startsWith('Tasks:') || line.startsWith('Threads:')) {
-      const m = line.match(/(\d+) total[,\s]+(\d+) running[,\s]+(\d+) sleeping/);
-      if (m) result.tasks = { total: +m[1], running: +m[2], sleeping: +m[3] };
-    } else if (line.match(/^%Cpu/)) {
-      const numMatch = line.match(/^%Cpu(\d+)\s*:/);
-      const cpuNum = numMatch ? parseInt(numMatch[1]) : -1;
-      const idMatch = line.match(/([\d.]+)\s*id/);
-      const usMatch = line.match(/([\d.]+)\s*us/);
-      const syMatch = line.match(/([\d.]+)\s*sy/);
-      const waMatch = line.match(/([\d.]+)\s*wa/);
-      const idle = idMatch ? parseFloat(idMatch[1]) : 0;
-      result.cpus.push({
-        num: cpuNum,
-        us: usMatch ? parseFloat(usMatch[1]) : 0,
-        sy: syMatch ? parseFloat(syMatch[1]) : 0,
-        wa: waMatch ? parseFloat(waMatch[1]) : 0,
-        idle,
-        used: parseFloat(Math.max(0, 100 - idle).toFixed(1)),
-      });
-    } else if (line.match(/^(MiB )?Mem\s*:/)) {
-      const totalM = line.match(/([\d.]+)\s*total/);
-      const usedM = line.match(/([\d.]+)\s*used/);
-      result.mem = {
-        total: totalM ? parseFloat(totalM[1]) : 0,
-        used: usedM ? parseFloat(usedM[1]) : 0,
-      };
-    } else if (line.match(/^(MiB )?Swap\s*:/)) {
-      const totalM = line.match(/([\d.]+)\s*total/);
-      const usedM = line.match(/([\d.]+)\s*used/);
-      result.swap = {
-        total: totalM ? parseFloat(totalM[1]) : 0,
-        used: usedM ? parseFloat(usedM[1]) : 0,
-      };
-    } else if (line.match(/^\s*PID\s+USER/)) {
-      inProcessSection = true;
-    } else if (inProcessSection && line.trim()) {
-      const parts = line.trim().split(/\s+/);
-      if (parts.length >= 11 && /^\d+$/.test(parts[0])) {
-        result.processes.push({
-          pid: parseInt(parts[0]),
-          user: parts[1],
-          pr: parts[2],
-          ni: parts[3],
-          virt: parts[4],
-          res: parts[5],
-          shr: parts[6],
-          s: parts[7],
-          cpu: parseFloat(parts[8]) || 0,
-          mem: parseFloat(parts[9]) || 0,
-          time: parts[10],
-          command: parts.slice(11).join(' '),
-        });
-      }
-    }
+const calcCpuPercent = (prev, curr) => {
+  const dIdle = (curr.idle + curr.iowait) - (prev.idle + prev.iowait);
+  const dTotal =
+    (curr.user + curr.nice + curr.system + curr.idle + curr.iowait + curr.irq + curr.softirq + curr.steal) -
+    (prev.user + prev.nice + prev.system + prev.idle + prev.iowait + prev.irq + prev.softirq + prev.steal);
+  if (dTotal <= 0) return 0;
+  return Math.max(0, Math.min(100, ((dTotal - dIdle) / dTotal) * 100));
+};
+
+const formatKb = (kb) => {
+  const n = parseInt(kb) || 0;
+  if (n >= 1048576) return `${(n / 1048576).toFixed(1)}g`;
+  if (n >= 1024) return `${(n / 1024).toFixed(0)}m`;
+  return `${n}k`;
+};
+
+const parseSystemData = (output, prevStats) => {
+  const [loadSection = '', rest1 = ''] = output.split('---MEM---');
+  const [memSection = '', rest2 = ''] = rest1.split('---CPU---');
+  const [cpuSection = '', psSection = ''] = rest2.split('---PS---');
+
+  const result = { header: null, tasks: null, cpus: [], mem: null, swap: null, processes: [] };
+
+  // /proc/loadavg: "0.52 0.48 0.45 2/1234 5678"
+  const loadParts = loadSection.trim().split(/\s+/);
+  const taskParts = loadParts[3]?.split('/');
+  result.header = {
+    uptime: '',
+    load1: parseFloat(loadParts[0]) || 0,
+    load5: parseFloat(loadParts[1]) || 0,
+    load15: parseFloat(loadParts[2]) || 0,
+  };
+  if (taskParts) {
+    result.tasks = {
+      running: parseInt(taskParts[0]) || 0,
+      total: parseInt(taskParts[1]) || 0,
+      sleeping: Math.max(0, (parseInt(taskParts[1]) || 0) - (parseInt(taskParts[0]) || 0)),
+    };
   }
 
-  return result;
+  // /proc/meminfo
+  const meminfo = {};
+  for (const line of memSection.trim().split('\n')) {
+    const m = line.match(/^(\w+):\s+(\d+)/);
+    if (m) meminfo[m[1]] = parseInt(m[2]);
+  }
+  if (meminfo.MemTotal) {
+    const used = meminfo.MemTotal - (meminfo.MemAvailable ?? meminfo.MemFree ?? 0);
+    result.mem = { total: meminfo.MemTotal / 1024, used: used / 1024 };
+  }
+  result.swap = {
+    total: (meminfo.SwapTotal ?? 0) / 1024,
+    used: ((meminfo.SwapTotal ?? 0) - (meminfo.SwapFree ?? 0)) / 1024,
+  };
+
+  // /proc/stat — delta-based CPU% (same method as htop)
+  const newCpuStats = {};
+  for (const line of cpuSection.trim().split('\n')) {
+    if (!line.startsWith('cpu')) continue;
+    const name = line.trim().split(/\s+/)[0];
+    newCpuStats[name] = parseCpuStat(line);
+  }
+  for (const [name, curr] of Object.entries(newCpuStats)) {
+    if (name === 'cpu') continue;
+    const cpuNum = parseInt(name.replace('cpu', ''));
+    const prev = prevStats?.[name];
+    const used = prev ? calcCpuPercent(prev, curr) : 0;
+    result.cpus.push({ num: cpuNum, used: parseFloat(used.toFixed(1)) });
+  }
+  result.cpus.sort((a, b) => a.num - b.num);
+  if (result.cpus.length === 0 && newCpuStats.cpu) {
+    const prev = prevStats?.cpu;
+    const used = prev ? calcCpuPercent(prev, newCpuStats.cpu) : 0;
+    result.cpus.push({ num: -1, used: parseFloat(used.toFixed(1)) });
+  }
+
+  // ps output
+  for (const line of psSection.trim().split('\n')) {
+    if (!line.trim()) continue;
+    const parts = line.trim().split(/\s+/);
+    if (parts.length < 8 || !/^\d+$/.test(parts[0])) continue;
+    result.processes.push({
+      pid: parseInt(parts[0]),
+      user: parts[1],
+      cpu: parseFloat(parts[2]) || 0,
+      mem: parseFloat(parts[3]) || 0,
+      virt: formatKb(parts[4]),
+      res: formatKb(parts[5]),
+      s: parts[6],
+      command: parts.slice(7).join(' '),
+    });
+  }
+
+  return { data: result, cpuStats: newCpuStats };
 };
 
 const fetchSettings = async () => {
@@ -297,8 +334,8 @@ const fetchSystemData = async () => {
       method: 'POST',
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        command: 'top',
-        args: ['-b', '-n', '1', '-1', '-w', '512'],
+        command: '/bin/sh',
+        args: ['-c', "cat /proc/loadavg; echo '---MEM---'; cat /proc/meminfo; echo '---CPU---'; grep '^cpu' /proc/stat; echo '---PS---'; ps -eo pid,user:15,%cpu,%mem,vsz,rss,stat,comm --sort=-%cpu --no-headers"],
         timeout: 8,
         parse_json: false,
       }),
@@ -306,7 +343,9 @@ const fetchSystemData = async () => {
     if (res.ok) {
       const data = await res.json();
       const output = typeof data.output === 'string' ? data.output : JSON.stringify(data.output);
-      sysData.value = parseTopOutput(output);
+      const { data: parsed, cpuStats } = parseSystemData(output, prevCpuStats.value);
+      prevCpuStats.value = cpuStats;
+      sysData.value = parsed;
     }
   } catch (e) {
     console.error('Failed to fetch system data:', e);
