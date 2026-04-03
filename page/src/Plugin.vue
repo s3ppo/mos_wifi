@@ -1,258 +1,148 @@
 <template>
   <div>
-    <h2 class="mb-4">amdgpu TOP Plugin</h2>
+    <h2 class="mb-4">htop</h2>
     <v-skeleton-loader v-if="loading" :loading="true" type="card" />
-    <v-card v-else-if="!isConfigured" class="mb-4 pa-0">
-      <v-card-text class="pa-4">
-        Please configure the plugin first to display GPU data.
-      </v-card-text>
-    </v-card>
     <div v-else style="margin-bottom: 80px">
-      <v-card v-for="(gpu, index) in settings.gpus" :key="index" class="mb-4 pa-0">
-        <v-card-title class="d-flex align-center">
-          <span>{{ getGpuName(gpu.pci) }}</span>
+      <!-- System Overview Card -->
+      <v-card v-if="sysData" class="mb-4 pa-0">
+        <v-card-title class="d-flex align-center flex-wrap gap-2">
+          <span>System Overview</span>
           <v-spacer />
-          <v-chip size="small">{{ gpu.pci }}</v-chip>
+          <v-chip v-if="sysData.header" size="small" class="mr-2">
+            Load: {{ sysData.header.load1.toFixed(2) }} / {{ sysData.header.load5.toFixed(2) }} / {{ sysData.header.load15.toFixed(2) }}
+          </v-chip>
+          <v-chip v-if="sysData.header" size="small">
+            Uptime: {{ sysData.header.uptime }}
+          </v-chip>
         </v-card-title>
-        <v-card-text v-if="gpuData[gpu.pci]" class="pa-4">
-          <v-row dense>
-            <v-col v-if="gpuData[gpu.pci].Info?.['Chip Class']" cols="6" md="3">
-              <div class="text-caption text-medium-emphasis"><strong>Chip Class</strong></div>
-              <div class="text-body-2">{{ gpuData[gpu.pci].Info['Chip Class'] }}</div>
-            </v-col>
-            <v-col v-if="gpuData[gpu.pci].Info?.['GPU Type']" cols="6" md="3">
-              <div class="text-caption text-medium-emphasis"><strong>GPU Type</strong></div>
-              <div class="text-body-2">{{ gpuData[gpu.pci].Info['GPU Type'] }}</div>
-            </v-col>
-            <v-col v-if="gpuData[gpu.pci].Info?.['VRAM Type']" cols="6" md="3">
-              <div class="text-caption text-medium-emphasis"><strong>VRAM Type</strong></div>
-              <div class="text-body-2">{{ gpuData[gpu.pci].Info['VRAM Type'] }}</div>
-            </v-col>
-            <v-col v-if="gpuData[gpu.pci].Info?.['Total Compute Unit']" cols="6" md="3">
-              <div class="text-caption text-medium-emphasis"><strong>Compute Units</strong></div>
-              <div class="text-body-2">{{ gpuData[gpu.pci].Info['Total Compute Unit'] }}</div>
-            </v-col>
-          </v-row>
-          <v-divider class="mt-2 mb-2" />
-          <v-row dense>
-            <v-col v-if="gpuData[gpu.pci].Sensors?.['Edge Temperature']?.value != null" cols="6" md="3">
-              <div class="text-caption text-medium-emphasis"><strong>Temperature</strong></div>
-              <div class="text-body-2">{{ gpuData[gpu.pci].Sensors['Edge Temperature'].value }} °C</div>
-            </v-col>
-            <v-col v-if="gpuData[gpu.pci].Sensors?.['Junction Temperature']?.value != null" cols="6" md="3">
-              <div class="text-caption text-medium-emphasis"><strong>Junction Temp</strong></div>
-              <div class="text-body-2">{{ gpuData[gpu.pci].Sensors['Junction Temperature'].value }} °C</div>
-            </v-col>
-            <v-col v-if="gpuData[gpu.pci].Sensors?.['Average Power']?.value != null" cols="6" md="3">
-              <div class="text-caption text-medium-emphasis"><strong>Average Power</strong></div>
-              <div class="text-body-2">{{ gpuData[gpu.pci].Sensors['Average Power'].value }} W</div>
-            </v-col>
-            <v-col v-if="gpuData[gpu.pci].Sensors?.['Input Power']?.value != null" cols="6" md="3">
-              <div class="text-caption text-medium-emphasis"><strong>Input Power</strong></div>
-              <div class="text-body-2">{{ gpuData[gpu.pci].Sensors['Input Power'].value }} W</div>
-            </v-col>
-            <v-col v-if="gpuData[gpu.pci].Sensors?.['GFX_SCLK']?.value != null" cols="6" md="3">
-              <div class="text-caption text-medium-emphasis"><strong>GFX Clock</strong></div>
-              <div class="text-body-2">{{ gpuData[gpu.pci].Sensors['GFX_SCLK'].value }} MHz</div>
-            </v-col>
-            <v-col v-if="gpuData[gpu.pci].Sensors?.['GFX_MCLK']?.value != null" cols="6" md="3">
-              <div class="text-caption text-medium-emphasis"><strong>Memory Clock</strong></div>
-              <div class="text-body-2">{{ gpuData[gpu.pci].Sensors['GFX_MCLK'].value }} MHz</div>
-            </v-col>
-            <v-col v-if="gpuData[gpu.pci].Sensors?.['Fan']?.value != null" cols="6" md="3">
-              <div class="text-caption text-medium-emphasis"><strong>Fan Speed</strong></div>
-              <div class="text-body-2">{{ gpuData[gpu.pci].Sensors['Fan'].value }} RPM</div>
-            </v-col>
-            <v-col v-if="gpuData[gpu.pci].Sensors?.['Power Profile']" cols="6" md="3">
-              <div class="text-caption text-medium-emphasis"><strong>Power Profile</strong></div>
-              <div class="text-body-2">{{ gpuData[gpu.pci].Sensors['Power Profile'] }}</div>
-            </v-col>
-          </v-row>
-          <v-divider class="mt-2 mb-2" />
-          <v-row v-if="gpuData[gpu.pci].VRAM" dense>
-            <v-col cols="12" md="6">
-              <div class="d-flex align-center mb-1">
-                <span class="text-caption" style="width: 80px"><strong>VRAM:</strong></span>
-                <v-progress-linear
-                  :model-value="getVramPercent(gpu.pci)"
-                  height="16"
-                  :color="getVramPercent(gpu.pci) >= 90 ? 'red' : getVramPercent(gpu.pci) >= 75 ? 'orange' : 'green'"
-                  style="border-radius: 7px; overflow: hidden; flex: 1"
-                >
-                  <template #default>
-                    <span><small>{{ gpuData[gpu.pci].VRAM['Total VRAM Usage']?.value || 0 }} / {{ gpuData[gpu.pci].VRAM['Total VRAM']?.value || 0 }} MiB</small></span>
-                  </template>
-                </v-progress-linear>
-              </div>
-            </v-col>
-            <v-col cols="12" md="6">
-              <div class="d-flex align-center mb-1">
-                <span class="text-caption" style="width: 80px"><strong>GTT:</strong></span>
-                <v-progress-linear
-                  :model-value="getGttPercent(gpu.pci)"
-                  height="16"
-                  :color="getGttPercent(gpu.pci) >= 90 ? 'red' : getGttPercent(gpu.pci) >= 75 ? 'orange' : 'green'"
-                  style="border-radius: 7px; overflow: hidden; flex: 1"
-                >
-                  <template #default>
-                    <span><small>{{ gpuData[gpu.pci].VRAM['Total GTT Usage']?.value || 0 }} / {{ gpuData[gpu.pci].VRAM['Total GTT']?.value || 0 }} MiB</small></span>
-                  </template>
-                </v-progress-linear>
-              </div>
-            </v-col>
-          </v-row>
-          <v-row v-if="gpuData[gpu.pci].gpu_activity" dense class="mt-2">
-            <v-col cols="12">
-              <div class="text-caption text-medium-emphasis mb-1"><strong>GPU Activity</strong></div>
-              <v-row dense>
-                <v-col v-if="gpuData[gpu.pci].gpu_activity?.GFX?.value != null" cols="12" md="4">
-                  <div style="display: flex; align-items: center; gap: 6px">
-                    <span class="text-body-2" style="width: 100px"><small><b>GFX</b></small></span>
-                    <v-progress-linear
-                      :model-value="gpuData[gpu.pci].gpu_activity.GFX.value || 0"
-                      height="12"
-                      :color="gpuData[gpu.pci].gpu_activity.GFX.value >= 90 ? 'red' : gpuData[gpu.pci].gpu_activity.GFX.value >= 75 ? 'orange' : 'green'"
-                      style="border-radius: 6px; overflow: hidden; flex: 1"
-                    >
-                      <template #default>
-                        <span><small>{{ gpuData[gpu.pci].gpu_activity.GFX.value || 0 }}%</small></span>
-                      </template>
-                    </v-progress-linear>
-                  </div>
-                </v-col>
-                <v-col v-if="gpuData[gpu.pci].gpu_activity?.MediaEngine?.value != null" cols="12" md="4">
-                  <div style="display: flex; align-items: center; gap: 6px">
-                    <span class="text-body-2" style="width: 100px"><small><b>Media</b></small></span>
-                    <v-progress-linear
-                      :model-value="gpuData[gpu.pci].gpu_activity.MediaEngine.value || 0"
-                      height="12"
-                      :color="gpuData[gpu.pci].gpu_activity.MediaEngine.value >= 90 ? 'red' : gpuData[gpu.pci].gpu_activity.MediaEngine.value >= 75 ? 'orange' : 'green'"
-                      style="border-radius: 6px; overflow: hidden; flex: 1"
-                    >
-                      <template #default>
-                        <span><small>{{ gpuData[gpu.pci].gpu_activity.MediaEngine.value || 0 }}%</small></span>
-                      </template>
-                    </v-progress-linear>
-                  </div>
-                </v-col>
-                <v-col v-if="gpuData[gpu.pci].gpu_activity?.Memory?.value != null" cols="12" md="4">
-                  <div style="display: flex; align-items: center; gap: 6px">
-                    <span class="text-body-2" style="width: 100px"><small><b>Memory</b></small></span>
-                    <v-progress-linear
-                      :model-value="gpuData[gpu.pci].gpu_activity.Memory.value || 0"
-                      height="12"
-                      :color="gpuData[gpu.pci].gpu_activity.Memory.value >= 90 ? 'red' : gpuData[gpu.pci].gpu_activity.Memory.value >= 75 ? 'orange' : 'green'"
-                      style="border-radius: 6px; overflow: hidden; flex: 1"
-                    >
-                      <template #default>
-                        <span><small>{{ gpuData[gpu.pci].gpu_activity.Memory.value || 0 }}%</small></span>
-                      </template>
-                    </v-progress-linear>
-                  </div>
-                </v-col>
-              </v-row>
-            </v-col>
-          </v-row>
-          <v-row v-if="gpuData[gpu.pci].GRBM && hasGrbmData(gpu.pci)" dense class="mt-2">
-            <v-col cols="12">
-              <details>
-                <summary style="cursor: pointer; color: var(--v-theme-primary); text-decoration: underline" class="text-body-2 mb-1">GRBM Engines</summary>
-                <v-row dense class="mt-1">
-                  <v-col v-for="(engine, engineName) in gpuData[gpu.pci].GRBM" :key="engineName" cols="6" md="4">
-                    <div style="display: flex; align-items: center; gap: 6px">
-                      <span class="text-caption" style="width: 120px; flex-shrink: 0">{{ engineName }}</span>
-                      <v-progress-linear
-                        :model-value="engine.value || 0"
-                        height="10"
-                        :color="engine.value >= 90 ? 'red' : engine.value >= 75 ? 'orange' : 'green'"
-                        style="border-radius: 4px; overflow: hidden; flex: 1"
-                      />
-                      <span class="text-caption" style="width: 40px; text-align: right; flex-shrink: 0">{{ engine.value || 0 }}%</span>
-                    </div>
-                  </v-col>
-                </v-row>
-              </details>
-            </v-col>
-          </v-row>
-          <v-row v-if="gpuData[gpu.pci].GRBM2 && hasGrbm2Data(gpu.pci)" dense class="mt-2">
-            <v-col cols="12">
-              <details>
-                <summary style="cursor: pointer; color: var(--v-theme-primary); text-decoration: underline" class="text-body-2 mb-1">GRBM2 Engines</summary>
-                <v-row dense class="mt-1">
-                  <v-col v-for="(engine, engineName) in gpuData[gpu.pci].GRBM2" :key="engineName" cols="6" md="4">
-                    <div style="display: flex; align-items: center; gap: 6px">
-                      <span class="text-caption" style="width: 180px; flex-shrink: 0">{{ engineName }}</span>
-                      <v-progress-linear
-                        :model-value="engine.value || 0"
-                        height="10"
-                        :color="engine.value >= 90 ? 'red' : engine.value >= 75 ? 'orange' : 'green'"
-                        style="border-radius: 4px; overflow: hidden; flex: 1"
-                      />
-                      <span class="text-caption" style="width: 40px; text-align: right; flex-shrink: 0">{{ engine.value || 0 }}%</span>
-                    </div>
-                  </v-col>
-                </v-row>
-              </details>
-            </v-col>
-          </v-row>
-          <v-row v-if="gpuData[gpu.pci].fdinfo && Object.keys(gpuData[gpu.pci].fdinfo).length > 0" dense class="mt-2">
-            <v-col cols="12">
-              <details>
-                <summary style="cursor: pointer; color: var(--v-theme-primary); text-decoration: underline" class="text-body-2 mb-1">Processes</summary>
-                <div v-for="(proc, pid) in gpuData[gpu.pci].fdinfo" :key="pid" class="mb-3">
-                  <div class="d-flex align-center mb-1">
-                    <span class="text-body-2"><b>{{ proc.name || 'Unknown' }}</b></span>
-                    <span class="text-caption text-medium-emphasis ml-2">PID: {{ pid }}</span>
-                  </div>
-                  <v-row v-if="proc.usage?.usage" dense>
-                    <v-col v-if="proc.usage.usage.GFX" cols="6" md="3">
-                      <div style="display: flex; align-items: center; gap: 6px">
-                        <span class="text-caption" style="width: 60px; flex-shrink: 0">GFX</span>
-                        <v-progress-linear
-                          :model-value="proc.usage.usage.GFX.value || 0"
-                          height="10"
-                          :color="proc.usage.usage.GFX.value >= 90 ? 'red' : proc.usage.usage.GFX.value >= 75 ? 'orange' : 'green'"
-                          style="border-radius: 4px; overflow: hidden; flex: 1"
-                        />
-                        <span class="text-caption" style="width: 40px; text-align: right; flex-shrink: 0">{{ proc.usage.usage.GFX.value || 0 }}%</span>
-                      </div>
-                    </v-col>
-                    <v-col v-if="proc.usage.usage.Compute" cols="6" md="3">
-                      <div style="display: flex; align-items: center; gap: 6px">
-                        <span class="text-caption" style="width: 60px; flex-shrink: 0">Compute</span>
-                        <v-progress-linear
-                          :model-value="proc.usage.usage.Compute.value || 0"
-                          height="10"
-                          :color="proc.usage.usage.Compute.value >= 90 ? 'red' : proc.usage.usage.Compute.value >= 75 ? 'orange' : 'green'"
-                          style="border-radius: 4px; overflow: hidden; flex: 1"
-                        />
-                        <span class="text-caption" style="width: 40px; text-align: right; flex-shrink: 0">{{ proc.usage.usage.Compute.value || 0 }}%</span>
-                      </div>
-                    </v-col>
-                    <v-col v-if="proc.usage.usage.VRAM" cols="6" md="3">
-                      <div style="display: flex; align-items: center; gap: 6px">
-                        <span class="text-caption" style="width: 60px; flex-shrink: 0">VRAM</span>
-                        <span class="text-caption">{{ proc.usage.usage.VRAM.value || 0 }} {{ proc.usage.usage.VRAM.unit }}</span>
-                      </div>
-                    </v-col>
-                    <v-col v-if="proc.usage.usage.GTT" cols="6" md="3">
-                      <div style="display: flex; align-items: center; gap: 6px">
-                        <span class="text-caption" style="width: 60px; flex-shrink: 0">GTT</span>
-                        <span class="text-caption">{{ proc.usage.usage.GTT.value || 0 }} {{ proc.usage.usage.GTT.unit }}</span>
-                      </div>
-                    </v-col>
-                  </v-row>
+        <v-card-text class="pa-4">
+
+          <!-- Tasks -->
+          <div v-if="sysData.tasks" class="text-caption text-medium-emphasis mb-3">
+            Tasks: <strong>{{ sysData.tasks.total }}</strong> total,
+            <strong>{{ sysData.tasks.running }}</strong> running,
+            <strong>{{ sysData.tasks.sleeping }}</strong> sleeping
+          </div>
+
+          <!-- CPU Bars -->
+          <div v-if="sysData.cpus.length" class="mb-4">
+            <div class="text-caption text-medium-emphasis mb-2"><strong>CPU</strong></div>
+            <v-row dense>
+              <v-col
+                v-for="cpu in sysData.cpus"
+                :key="cpu.num"
+                cols="12"
+                md="6"
+                lg="4"
+              >
+                <div style="display: flex; align-items: center; gap: 6px" class="mb-1">
+                  <span class="text-caption" style="width: 52px; flex-shrink: 0">
+                    {{ cpu.num >= 0 ? `CPU${cpu.num}` : 'CPU' }}
+                  </span>
+                  <v-progress-linear
+                    :model-value="cpu.used"
+                    height="14"
+                    :color="cpu.used >= 90 ? 'red' : cpu.used >= 70 ? 'orange' : 'green'"
+                    style="border-radius: 6px; overflow: hidden; flex: 1"
+                  >
+                    <template #default>
+                      <span><small>{{ cpu.used.toFixed(1) }}%</small></span>
+                    </template>
+                  </v-progress-linear>
                 </div>
-              </details>
-            </v-col>
-          </v-row>
-        </v-card-text>
-        <v-card-text v-else class="text-center pa-8 text-grey">
-          Loading data...
+              </v-col>
+            </v-row>
+          </div>
+
+          <!-- Memory Bar -->
+          <div v-if="sysData.mem" class="mb-2">
+            <div class="d-flex align-center mb-1">
+              <span class="text-caption" style="width: 52px; flex-shrink: 0"><strong>Mem</strong></span>
+              <v-progress-linear
+                :model-value="memPercent"
+                height="16"
+                :color="memPercent >= 90 ? 'red' : memPercent >= 75 ? 'orange' : 'green'"
+                style="border-radius: 7px; overflow: hidden; flex: 1"
+              >
+                <template #default>
+                  <span><small>{{ sysData.mem.used.toFixed(0) }} / {{ sysData.mem.total.toFixed(0) }} MiB</small></span>
+                </template>
+              </v-progress-linear>
+            </div>
+          </div>
+
+          <!-- Swap Bar -->
+          <div v-if="sysData.swap && sysData.swap.total > 0">
+            <div class="d-flex align-center">
+              <span class="text-caption" style="width: 52px; flex-shrink: 0"><strong>Swp</strong></span>
+              <v-progress-linear
+                :model-value="swapPercent"
+                height="16"
+                :color="swapPercent >= 90 ? 'red' : swapPercent >= 50 ? 'orange' : 'cyan'"
+                style="border-radius: 7px; overflow: hidden; flex: 1"
+              >
+                <template #default>
+                  <span><small>{{ sysData.swap.used.toFixed(0) }} / {{ sysData.swap.total.toFixed(0) }} MiB</small></span>
+                </template>
+              </v-progress-linear>
+            </div>
+          </div>
+
         </v-card-text>
       </v-card>
+
+      <!-- No data yet -->
+      <v-card v-else class="mb-4 pa-0">
+        <v-card-text class="pa-4 text-grey text-center">Fetching system data...</v-card-text>
+      </v-card>
+
+      <!-- Process List -->
+      <v-card v-if="sysData?.processes?.length" class="pa-0">
+        <v-card-title>Processes</v-card-title>
+        <v-card-text class="pa-0">
+          <v-table density="compact" fixed-header height="420px">
+            <thead>
+              <tr>
+                <th
+                  v-for="col in columns"
+                  :key="col.field"
+                  :style="col.sortable ? 'cursor: pointer; user-select: none' : ''"
+                  @click="col.sortable ? setSortField(col.field) : null"
+                >
+                  {{ col.label }}
+                  <v-icon v-if="sortField === col.field" size="x-small">
+                    mdi-arrow-down
+                  </v-icon>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="proc in sortedProcesses" :key="proc.pid">
+                <td>{{ proc.pid }}</td>
+                <td>{{ proc.user }}</td>
+                <td>
+                  <span :style="{ color: proc.cpu > 50 ? '#f44336' : proc.cpu > 20 ? '#ff9800' : undefined }">
+                    {{ proc.cpu.toFixed(1) }}%
+                  </span>
+                </td>
+                <td>
+                  <span :style="{ color: proc.mem > 50 ? '#f44336' : proc.mem > 20 ? '#ff9800' : undefined }">
+                    {{ proc.mem.toFixed(1) }}%
+                  </span>
+                </td>
+                <td>{{ proc.res }}</td>
+                <td>{{ proc.s }}</td>
+                <td class="text-truncate" style="max-width: 220px">{{ proc.command }}</td>
+              </tr>
+            </tbody>
+          </v-table>
+        </v-card-text>
+      </v-card>
+
     </div>
-    <v-dialog v-model="settingsDialog.value" max-width="600">
+
+    <!-- Settings Dialog -->
+    <v-dialog v-model="settingsDialog.value" max-width="500">
       <v-card class="pa-0">
         <v-card-title>Settings</v-card-title>
         <v-card-text>
@@ -264,15 +154,12 @@
               min="1"
               @blur="validateInterval"
             />
-            <v-select
-              v-model="settingsDialog.selectedGpus"
-              :items="availableGpusItems"
-              item-title="title"
-              item-value="value"
-              label="GPUs"
-              multiple
-              chips
-              clearable
+            <v-text-field
+              v-model.number="settingsDialog.maxProcesses"
+              label="Max processes shown"
+              type="number"
+              min="5"
+              max="500"
             />
           </v-form>
         </v-card-text>
@@ -283,6 +170,7 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
     <v-fab color="primary" style="position: fixed; bottom: 32px; right: 32px; z-index: 1000" size="large" icon @click="openSettingsDialog">
       <v-icon>mdi-cog</v-icon>
     </v-fab>
@@ -293,82 +181,145 @@
 import { ref, computed, reactive, onMounted, onUnmounted } from 'vue';
 
 const loading = ref(true);
-const settings = ref({ gpus: [], interval: 2 });
-const gpuData = ref({});
-const availableGpus = ref([]);
+const settings = ref({ interval: 2, maxProcesses: 50 });
+const sysData = ref(null);
+const sortField = ref('cpu');
 let pollInterval = null;
 
 const settingsDialog = reactive({
   value: false,
   interval: 2,
-  selectedGpus: [],
+  maxProcesses: 50,
   saving: false,
 });
 
-const isConfigured = computed(() => {
-  return settings.value.gpus && settings.value.gpus.length > 0 && settings.value.gpus.some((g) => g.pci);
-});
-
-const availableGpusItems = computed(() => {
-  return availableGpus.value.map((gpu) => ({
-    title: `${gpu.name} (${gpu.pci})`,
-    value: gpu.pci,
-  }));
-});
+const columns = [
+  { field: 'pid',     label: 'PID',      sortable: true },
+  { field: 'user',    label: 'User',     sortable: false },
+  { field: 'cpu',     label: 'CPU%',     sortable: true },
+  { field: 'mem',     label: 'MEM%',     sortable: true },
+  { field: 'res',     label: 'RES',      sortable: false },
+  { field: 's',       label: 'S',        sortable: false },
+  { field: 'command', label: 'Command',  sortable: false },
+];
 
 const getAuthHeaders = () => ({
   Authorization: 'Bearer ' + localStorage.getItem('authToken'),
 });
 
-const getGpuName = (pci) => {
-  const gpu = availableGpus.value.find((g) => g.pci === pci);
-  return gpu ? gpu.name : `GPU ${pci}`;
-};
-
 const validateInterval = () => {
-  if (settingsDialog.interval < 1) {
-    settingsDialog.interval = 1;
+  if (settingsDialog.interval < 1) settingsDialog.interval = 1;
+};
+
+const memPercent = computed(() => {
+  if (!sysData.value?.mem || !sysData.value.mem.total) return 0;
+  return (sysData.value.mem.used / sysData.value.mem.total) * 100;
+});
+
+const swapPercent = computed(() => {
+  if (!sysData.value?.swap || !sysData.value.swap.total) return 0;
+  return (sysData.value.swap.used / sysData.value.swap.total) * 100;
+});
+
+const sortedProcesses = computed(() => {
+  if (!sysData.value?.processes) return [];
+  const procs = [...sysData.value.processes];
+  procs.sort((a, b) => {
+    const va = typeof a[sortField.value] === 'number' ? a[sortField.value] : 0;
+    const vb = typeof b[sortField.value] === 'number' ? b[sortField.value] : 0;
+    return vb - va;
+  });
+  return procs.slice(0, settings.value.maxProcesses);
+});
+
+const setSortField = (field) => {
+  sortField.value = field;
+};
+
+const parseTopOutput = (output) => {
+  const lines = output.split('\n');
+  const result = { header: null, tasks: null, cpus: [], mem: null, swap: null, processes: [] };
+  let inProcessSection = false;
+
+  for (const line of lines) {
+    if (line.startsWith('top -')) {
+      const loadMatch = line.match(/load average:\s*([\d.]+),\s*([\d.]+),\s*([\d.]+)/);
+      const uptimeMatch = line.match(/up (.+?),\s*\d+ user/);
+      result.header = {
+        uptime: uptimeMatch ? uptimeMatch[1].trim() : '',
+        load1:  loadMatch ? parseFloat(loadMatch[1]) : 0,
+        load5:  loadMatch ? parseFloat(loadMatch[2]) : 0,
+        load15: loadMatch ? parseFloat(loadMatch[3]) : 0,
+      };
+    } else if (line.startsWith('Tasks:') || line.startsWith('Threads:')) {
+      const m = line.match(/(\d+) total[,\s]+(\d+) running[,\s]+(\d+) sleeping/);
+      if (m) result.tasks = { total: +m[1], running: +m[2], sleeping: +m[3] };
+    } else if (line.match(/^%Cpu/)) {
+      const numMatch = line.match(/^%Cpu(\d+)\s*:/);
+      const cpuNum = numMatch ? parseInt(numMatch[1]) : -1;
+      const idMatch = line.match(/([\d.]+)\s*id/);
+      const usMatch = line.match(/([\d.]+)\s*us/);
+      const syMatch = line.match(/([\d.]+)\s*sy/);
+      const waMatch = line.match(/([\d.]+)\s*wa/);
+      const idle = idMatch ? parseFloat(idMatch[1]) : 0;
+      result.cpus.push({
+        num: cpuNum,
+        us: usMatch ? parseFloat(usMatch[1]) : 0,
+        sy: syMatch ? parseFloat(syMatch[1]) : 0,
+        wa: waMatch ? parseFloat(waMatch[1]) : 0,
+        idle,
+        used: parseFloat(Math.max(0, 100 - idle).toFixed(1)),
+      });
+    } else if (line.match(/^(MiB )?Mem\s*:/)) {
+      const totalM = line.match(/([\d.]+)\s*total/);
+      const usedM  = line.match(/([\d.]+)\s*used/);
+      result.mem = {
+        total: totalM ? parseFloat(totalM[1]) : 0,
+        used:  usedM  ? parseFloat(usedM[1])  : 0,
+      };
+    } else if (line.match(/^(MiB )?Swap\s*:/)) {
+      const totalM = line.match(/([\d.]+)\s*total/);
+      const usedM  = line.match(/([\d.]+)\s*used/);
+      result.swap = {
+        total: totalM ? parseFloat(totalM[1]) : 0,
+        used:  usedM  ? parseFloat(usedM[1])  : 0,
+      };
+    } else if (line.match(/^\s*PID\s+USER/)) {
+      inProcessSection = true;
+    } else if (inProcessSection && line.trim()) {
+      const parts = line.trim().split(/\s+/);
+      if (parts.length >= 11 && /^\d+$/.test(parts[0])) {
+        result.processes.push({
+          pid:     parseInt(parts[0]),
+          user:    parts[1],
+          pr:      parts[2],
+          ni:      parts[3],
+          virt:    parts[4],
+          res:     parts[5],
+          shr:     parts[6],
+          s:       parts[7],
+          cpu:     parseFloat(parts[8])  || 0,
+          mem:     parseFloat(parts[9])  || 0,
+          time:    parts[10],
+          command: parts.slice(11).join(' '),
+        });
+      }
+    }
   }
-};
 
-const getVramPercent = (pci) => {
-  const data = gpuData.value[pci];
-  if (!data?.VRAM) return 0;
-  const total = data.VRAM['Total VRAM']?.value || 1;
-  const used = data.VRAM['Total VRAM Usage']?.value || 0;
-  return (used / total) * 100;
-};
-
-const getGttPercent = (pci) => {
-  const data = gpuData.value[pci];
-  if (!data?.VRAM) return 0;
-  const total = data.VRAM['Total GTT']?.value || 1;
-  const used = data.VRAM['Total GTT Usage']?.value || 0;
-  return (used / total) * 100;
-};
-
-const hasGrbmData = (pci) => {
-  const grbm = gpuData.value[pci]?.GRBM;
-  if (!grbm) return false;
-  return Object.values(grbm).some((e) => e.value > 0);
-};
-
-const hasGrbm2Data = (pci) => {
-  const grbm2 = gpuData.value[pci]?.GRBM2;
-  if (!grbm2) return false;
-  return Object.values(grbm2).some((e) => e.value > 0);
+  return result;
 };
 
 const fetchSettings = async () => {
   try {
-    const res = await fetch('/api/v1/mos/plugins/settings/amdgpu-top', {
+    const res = await fetch('/api/v1/mos/plugins/settings/mos-htop', {
       headers: getAuthHeaders(),
     });
     if (res.ok) {
       const data = await res.json();
       settings.value = {
-        gpus: Array.isArray(data.gpus) ? data.gpus : [],
-        interval: data.interval || 2,
+        interval:    data.interval    || 2,
+        maxProcesses: data.maxProcesses || 50,
       };
     }
   } catch (e) {
@@ -376,70 +327,32 @@ const fetchSettings = async () => {
   }
 };
 
-const fetchAvailableGpus = async () => {
-  try {
-    const res = await fetch('/api/v1/system/gpus', {
-      headers: getAuthHeaders(),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data.AMD && Array.isArray(data.AMD)) {
-        availableGpus.value = data.AMD.map((gpu) => ({
-          pci: gpu.pci,
-          name: gpu.name,
-        }));
-      }
-    }
-  } catch (e) {
-    console.error('Failed to fetch GPUs:', e);
-  }
-};
-
-const fetchGpuData = async (gpu) => {
+const fetchSystemData = async () => {
   try {
     const res = await fetch('/api/v1/mos/plugins/query', {
       method: 'POST',
-      headers: {
-        ...getAuthHeaders(),
-        'Content-Type': 'application/json',
-      },
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        command: 'amdgpu_top',
-        args: ['-n', '1', '-J', '-i', gpu.index?.toString() || '0'],
-        timeout: 5,
-        parse_json: true,
+        command:    'top',
+        args:       ['-b', '-n', '1', '-1', '-w', '512'],
+        timeout:    8,
+        parse_json: false,
       }),
     });
-
     if (res.ok) {
       const data = await res.json();
-      const output = data.output;
-      if (output?.devices && output.devices.length > 0) {
-        gpuData.value[gpu.pci] = output.devices[0];
-      }
+      const output = typeof data.output === 'string' ? data.output : JSON.stringify(data.output);
+      sysData.value = parseTopOutput(output);
     }
   } catch (e) {
-    console.error(`Failed to fetch data for GPU ${gpu.pci}:`, e);
-  }
-};
-
-const fetchAllGpuData = async () => {
-  if (!isConfigured.value) return;
-
-  for (const gpu of settings.value.gpus) {
-    if (gpu.pci) {
-      await fetchGpuData(gpu);
-    }
+    console.error('Failed to fetch system data:', e);
   }
 };
 
 const startPolling = () => {
   stopPolling();
-  if (!isConfigured.value) return;
-
-  fetchAllGpuData();
   const interval = Math.max(1, settings.value.interval) * 1000;
-  pollInterval = setInterval(fetchAllGpuData, interval);
+  pollInterval = setInterval(fetchSystemData, interval);
 };
 
 const stopPolling = () => {
@@ -450,35 +363,28 @@ const stopPolling = () => {
 };
 
 const openSettingsDialog = () => {
-  settingsDialog.interval = settings.value.interval || 2;
-  settingsDialog.selectedGpus = settings.value.gpus.map((g) => g.pci).filter(Boolean);
-  settingsDialog.saving = false;
-  settingsDialog.value = true;
+  settingsDialog.interval     = settings.value.interval;
+  settingsDialog.maxProcesses = settings.value.maxProcesses;
+  settingsDialog.saving       = false;
+  settingsDialog.value        = true;
 };
 
 const saveSettings = async () => {
   settingsDialog.saving = true;
   validateInterval();
-
   try {
-    const gpus = settingsDialog.selectedGpus.map((pci, idx) => ({ pci, index: idx }));
-
-    const res = await fetch('/api/v1/mos/plugins/settings/amdgpu-top', {
+    const res = await fetch('/api/v1/mos/plugins/settings/mos-htop', {
       method: 'POST',
-      headers: {
-        ...getAuthHeaders(),
-        'Content-Type': 'application/json',
-      },
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        gpus: gpus,
-        interval: settingsDialog.interval,
+        interval:     settingsDialog.interval,
+        maxProcesses: settingsDialog.maxProcesses,
       }),
     });
-
     if (res.ok) {
       settings.value = {
-        gpus: gpus,
-        interval: settingsDialog.interval,
+        interval:     settingsDialog.interval,
+        maxProcesses: settingsDialog.maxProcesses,
       };
       settingsDialog.value = false;
       startPolling();
@@ -492,15 +398,14 @@ const saveSettings = async () => {
 
 onMounted(async () => {
   try {
-    await Promise.all([fetchSettings(), fetchAvailableGpus()]);
-    if (isConfigured.value) {
-      startPolling();
-    }
+    await fetchSettings();
+    await fetchSystemData();
   } catch (e) {
     console.error('Failed to initialize:', e);
   } finally {
     loading.value = false;
   }
+  startPolling();
 });
 
 onUnmounted(() => {

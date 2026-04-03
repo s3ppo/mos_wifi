@@ -1,7 +1,4 @@
 # Third-Party Software
 
-This repository builds and packages third-party open-source software.
-The following components are included but remain licensed under their
-original upstream licenses:
-
-- [amdgpu_top](https://github.com/Umio-Yasuno/amdgpu_top)
+This plugin relies on `top` (part of `procps`) which is available on
+the target system and is not bundled in this package.

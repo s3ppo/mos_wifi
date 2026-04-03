@@ -1,5 +1,5 @@
 {
-  "name": "mos-plugin-amdgpu-top",
+  "name": "mos-plugin-htop",
   "private": true,
   "version": "0.0.0",
   "type": "module",

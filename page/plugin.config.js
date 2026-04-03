@@ -1,9 +1,9 @@
 export default {
-  name: 'amdgpu-top',
-  displayName: 'amdgpu Top',
-  description: 'Monitor AMD GPU usage and performance metrics',
-  version: '0.0.0',
+  name: 'mos-htop',
+  displayName: 'Htop for MOS',
+  description: 'Monitor system resources with Htop in MOS',
+  version: '0.0.1',
   icon: '',
-  author: 'ich777',
-  homepage: 'https://github.com/Umio-Yasuno/amdgpu_top',
+  author: 's3ppo',
+  homepage: 'https://github.com/s3ppo/mos-htop',
 };

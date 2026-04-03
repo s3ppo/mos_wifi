@@ -35,6 +35,14 @@ const generateManifest = () => ({
 });
 
 export default defineConfig({
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://mos-test.home:7575',
+        changeOrigin: true,
+      },
+    },
+  },
   define: {
     __PLUGIN_VERSION__: JSON.stringify(PLUGIN_VERSION),
     __PLUGIN_NAME__: JSON.stringify(pluginConfig.displayName),

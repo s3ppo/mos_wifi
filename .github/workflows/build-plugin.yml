@@ -30,32 +30,6 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
           echo "Building version: $VERSION"
 
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get -y install libdrm-dev libdrm-amdgpu1 jq wget
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Get latest amdgpu_top version
-        id: amdgpu-version
-        run: |
-          REPO_V=$(wget -qO- "https://api.github.com/repos/Umio-Yasuno/amdgpu_top/releases/latest" | jq -r '.tag_name')
-          echo "AMDGPU_VERSION=$REPO_V" >> $GITHUB_OUTPUT
-          echo "Using amdgpu_top version: $REPO_V"
-
-      - name: Clone and build amdgpu_top
-        run: |
-          git clone https://github.com/Umio-Yasuno/amdgpu_top.git
-          cd amdgpu_top
-          git checkout ${{ steps.amdgpu-version.outputs.AMDGPU_VERSION }}
-
-          cargo build --release --locked --features="json"
-
-      - name: Download AMD icon
-        run: wget -O icon.png "https://raw.githubusercontent.com/ich777/docker-templates/master/ich777/images/radeontop.png"
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -72,56 +46,26 @@ jobs:
       - name: Create package structure
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
-          PKG_NAME="amdgpu_top-${VERSION}-1+mos-plugin"
+          PKG_NAME="mos-htop-${VERSION}-1+mos-plugin"
           PKG_DIR="${PKG_NAME}_amd64"
 
-          mkdir -p ${PKG_DIR}/usr/bin
-          mkdir -p ${PKG_DIR}/usr/bin/plugins
-          mkdir -p ${PKG_DIR}/usr/share/doc/amdgpu_top
-          mkdir -p ${PKG_DIR}/usr/lib/amdgpu-top
-          mkdir -p ${PKG_DIR}/var/www/mos-plugins/amdgpu-top
+          mkdir -p ${PKG_DIR}/var/www/mos-plugins/mos-htop
           mkdir -p ${PKG_DIR}/DEBIAN
 
-          cp amdgpu_top/target/release/amdgpu_top ${PKG_DIR}/usr/bin/
-          chmod +x ${PKG_DIR}/usr/bin/amdgpu_top
-
-          cp /usr/lib/x86_64-linux-gnu/libdrm_amdgpu.so.* ${PKG_DIR}/usr/lib/amdgpu-top/
-
-          cp amdgpu_top/LICENSE ${PKG_DIR}/usr/share/doc/amdgpu_top/LICENSE
-
-          ln -s /usr/bin/amdgpu_top ${PKG_DIR}/usr/bin/plugins/amdgpu_top
-
-          cp -R page/dist/amdgpu-top/* ${PKG_DIR}/var/www/mos-plugins/amdgpu-top/
-
-          cp icon.png ${PKG_DIR}/var/www/mos-plugins/amdgpu-top/
+          cp -R page/dist/mos-htop/* ${PKG_DIR}/var/www/mos-plugins/mos-htop/
 
           cat > ${PKG_DIR}/DEBIAN/control << EOF
-          Package: amdgpu-top
+          Package: mos-htop
           Version: ${VERSION}-1+mos-plugin
           Architecture: amd64
           Maintainer: admin@minenet.at
-          Description: AMD GPU Top Plugin for MOS
+          Description: Htop Plugin for MOS
           EOF
-
-          cat > ${PKG_DIR}/DEBIAN/postinst << 'EOF'
-          #!/bin/bash
-          chmod +x /usr/bin/amdgpu_top
-          ldconfig /usr/lib/amdgpu-top
-          exit 0
-          EOF
-          chmod +x ${PKG_DIR}/DEBIAN/postinst
-
-          cat > ${PKG_DIR}/DEBIAN/postrm << 'EOF'
-          #!/bin/bash
-          ldconfig
-          exit 0
-          EOF
-          chmod +x ${PKG_DIR}/DEBIAN/postrm
 
       - name: Build .deb package
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
-          PKG_NAME="amdgpu_top-${VERSION}-1+mos-plugin"
+          PKG_NAME="mos-htop-${VERSION}-1+mos-plugin"
           PKG_DIR="${PKG_NAME}_amd64"
           DEB_FILE="${PKG_NAME}_amd64.deb"
 
@@ -133,13 +77,13 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ steps.version.outputs.VERSION }}
-          name: AMD GPU Top ${{ steps.version.outputs.VERSION }}
+          name: mos-htop ${{ steps.version.outputs.VERSION }}
           body: |
-            ## AMD GPU Top Plugin ${{ steps.version.outputs.VERSION }}
+            ## mos-htop Plugin ${{ steps.version.outputs.VERSION }}
 
           files: |
-            amdgpu_top-${{ steps.version.outputs.VERSION }}-1+mos-plugin_amd64.deb
-            amdgpu_top-${{ steps.version.outputs.VERSION }}-1+mos-plugin_amd64.deb.md5
+            mos-htop-${{ steps.version.outputs.VERSION }}-1+mos-plugin_amd64.deb
+            mos-htop-${{ steps.version.outputs.VERSION }}-1+mos-plugin_amd64.deb.md5
           draft: false
           prerelease: false
         env:

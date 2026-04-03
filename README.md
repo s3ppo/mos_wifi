@@ -1,6 +1,6 @@
-# MOS amdgpu-top
+# MOS Htop
 
-mos-amdgpu-top provides a **MOS plugin** that integrates the `amdgpu_top`
+Htop provides a **MOS plugin** that integrates the `htop`
 utility into the MOS ecosystem.
 
 ---
@@ -8,16 +8,7 @@ utility into the MOS ecosystem.
 ## Overview
 
 This repository contains the **MOS plugin implementation**, optional helper
-functions, configuration files (such as `settings.json`), and a packaged
-`amdgpu_top` binary required to expose AMD GPU monitoring functionality
-within MOS.
-
-The plugin allows MOS to provide GPU usage and performance information on
-systems with supported AMD GPUs.
-
-### Binary Source
-
-- amdgpu_top: [https://github.com/Umio-Yasuno/amdgpu_top](https://github.com/Umio-Yasuno/amdgpu_top)
+functions, configuration files (such as `settings.json`)
 
 ---
 
@@ -36,8 +27,6 @@ installed through the MOS Hub.
 The contents of this repository (plugin code, build scripts, configuration,
 and automation) are licensed under **GPL-3.0**.
 
-`amdgpu_top` itself is licensed under its respective upstream license.
-
 ---
 
 ## Third-Party Software
@@ -46,5 +35,5 @@ This repository builds and packages third-party open-source software.
 Packaged components remain licensed under their original upstream licenses.
 
 Refer to `THIRD_PARTY.md` for details.
-# mos-htop
-# mos-htop
+
+
