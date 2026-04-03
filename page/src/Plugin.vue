@@ -8,45 +8,35 @@
         <v-card-title class="d-flex align-center flex-wrap gap-2">
           <span>System Overview</span>
           <v-spacer />
-          <v-chip v-if="sysData.header" size="small" class="mr-2">
-            Load: {{ sysData.header.load1.toFixed(2) }} / {{ sysData.header.load5.toFixed(2) }} / {{ sysData.header.load15.toFixed(2) }}
-          </v-chip>
-          <v-chip v-if="sysData.header" size="small">
-            Uptime: {{ sysData.header.uptime }}
-          </v-chip>
+          <v-chip v-if="sysData.header" size="small" class="mr-2">Load: {{ sysData.header.load1.toFixed(2) }} / {{ sysData.header.load5.toFixed(2) }} / {{ sysData.header.load15.toFixed(2) }}</v-chip>
+          <v-chip v-if="sysData.header" size="small">Uptime: {{ sysData.header.uptime }}</v-chip>
         </v-card-title>
         <v-card-text class="pa-4">
-
           <!-- Tasks -->
           <div v-if="sysData.tasks" class="text-caption text-medium-emphasis mb-3">
-            Tasks: <strong>{{ sysData.tasks.total }}</strong> total,
-            <strong>{{ sysData.tasks.running }}</strong> running,
-            <strong>{{ sysData.tasks.sleeping }}</strong> sleeping
+            Tasks:
+            <strong>{{ sysData.tasks.total }}</strong>
+            total,
+            <strong>{{ sysData.tasks.running }}</strong>
+            running,
+            <strong>{{ sysData.tasks.sleeping }}</strong>
+            sleeping
           </div>
 
           <!-- CPU Bars -->
           <div v-if="sysData.cpus.length" class="mb-4">
             <div class="text-caption text-medium-emphasis mb-2"><strong>CPU</strong></div>
             <v-row dense>
-              <v-col
-                v-for="cpu in sysData.cpus"
-                :key="cpu.num"
-                cols="12"
-                md="6"
-                lg="4"
-              >
+              <v-col v-for="cpu in sysData.cpus" :key="cpu.num" cols="12" md="6" lg="4">
                 <div style="display: flex; align-items: center; gap: 6px" class="mb-1">
                   <span class="text-caption" style="width: 52px; flex-shrink: 0">
                     {{ cpu.num >= 0 ? `CPU${cpu.num}` : 'CPU' }}
                   </span>
-                  <v-progress-linear
-                    :model-value="cpu.used"
-                    height="14"
-                    :color="cpu.used >= 90 ? 'red' : cpu.used >= 70 ? 'orange' : 'green'"
-                    style="border-radius: 6px; overflow: hidden; flex: 1"
-                  >
+                  <v-progress-linear :model-value="cpu.used" height="14" :color="cpu.used >= 90 ? 'red' : cpu.used >= 70 ? 'orange' : 'green'" style="border-radius: 6px; overflow: hidden; flex: 1">
                     <template #default>
-                      <span><small>{{ cpu.used.toFixed(1) }}%</small></span>
+                      <span>
+                        <small>{{ cpu.used.toFixed(1) }}%</small>
+                      </span>
                     </template>
                   </v-progress-linear>
                 </div>
@@ -58,14 +48,11 @@
           <div v-if="sysData.mem" class="mb-2">
             <div class="d-flex align-center mb-1">
               <span class="text-caption" style="width: 52px; flex-shrink: 0"><strong>Mem</strong></span>
-              <v-progress-linear
-                :model-value="memPercent"
-                height="16"
-                :color="memPercent >= 90 ? 'red' : memPercent >= 75 ? 'orange' : 'green'"
-                style="border-radius: 7px; overflow: hidden; flex: 1"
-              >
+              <v-progress-linear :model-value="memPercent" height="16" :color="memPercent >= 90 ? 'red' : memPercent >= 75 ? 'orange' : 'green'" style="border-radius: 7px; overflow: hidden; flex: 1">
                 <template #default>
-                  <span><small>{{ sysData.mem.used.toFixed(0) }} / {{ sysData.mem.total.toFixed(0) }} MiB</small></span>
+                  <span>
+                    <small>{{ sysData.mem.used.toFixed(0) }} / {{ sysData.mem.total.toFixed(0) }} MiB</small>
+                  </span>
                 </template>
               </v-progress-linear>
             </div>
@@ -82,12 +69,13 @@
                 style="border-radius: 7px; overflow: hidden; flex: 1"
               >
                 <template #default>
-                  <span><small>{{ sysData.swap.used.toFixed(0) }} / {{ sysData.swap.total.toFixed(0) }} MiB</small></span>
+                  <span>
+                    <small>{{ sysData.swap.used.toFixed(0) }} / {{ sysData.swap.total.toFixed(0) }} MiB</small>
+                  </span>
                 </template>
               </v-progress-linear>
             </div>
           </div>
-
         </v-card-text>
       </v-card>
 
@@ -103,16 +91,9 @@
           <v-table density="compact" fixed-header height="420px">
             <thead>
               <tr>
-                <th
-                  v-for="col in columns"
-                  :key="col.field"
-                  :style="col.sortable ? 'cursor: pointer; user-select: none' : ''"
-                  @click="col.sortable ? setSortField(col.field) : null"
-                >
+                <th v-for="col in columns" :key="col.field" :style="col.sortable ? 'cursor: pointer; user-select: none' : ''" @click="col.sortable ? setSortField(col.field) : null">
                   {{ col.label }}
-                  <v-icon v-if="sortField === col.field" size="x-small">
-                    mdi-arrow-down
-                  </v-icon>
+                  <v-icon v-if="sortField === col.field" size="x-small">mdi-arrow-down</v-icon>
                 </th>
               </tr>
             </thead>
@@ -121,14 +102,10 @@
                 <td>{{ proc.pid }}</td>
                 <td>{{ proc.user }}</td>
                 <td>
-                  <span :style="{ color: proc.cpu > 50 ? '#f44336' : proc.cpu > 20 ? '#ff9800' : undefined }">
-                    {{ proc.cpu.toFixed(1) }}%
-                  </span>
+                  <span :style="{ color: proc.cpu > 50 ? '#f44336' : proc.cpu > 20 ? '#ff9800' : undefined }">{{ proc.cpu.toFixed(1) }}%</span>
                 </td>
                 <td>
-                  <span :style="{ color: proc.mem > 50 ? '#f44336' : proc.mem > 20 ? '#ff9800' : undefined }">
-                    {{ proc.mem.toFixed(1) }}%
-                  </span>
+                  <span :style="{ color: proc.mem > 50 ? '#f44336' : proc.mem > 20 ? '#ff9800' : undefined }">{{ proc.mem.toFixed(1) }}%</span>
                 </td>
                 <td>{{ proc.res }}</td>
                 <td>{{ proc.s }}</td>
@@ -138,7 +115,6 @@
           </v-table>
         </v-card-text>
       </v-card>
-
     </div>
 
     <!-- Settings Dialog -->
@@ -147,20 +123,8 @@
         <v-card-title>Settings</v-card-title>
         <v-card-text>
           <v-form>
-            <v-text-field
-              v-model.number="settingsDialog.interval"
-              label="Update interval (seconds)"
-              type="number"
-              min="1"
-              @blur="validateInterval"
-            />
-            <v-text-field
-              v-model.number="settingsDialog.maxProcesses"
-              label="Max processes shown"
-              type="number"
-              min="5"
-              max="500"
-            />
+            <v-text-field v-model.number="settingsDialog.interval" label="Update interval (seconds)" type="number" min="1" @blur="validateInterval" />
+            <v-text-field v-model.number="settingsDialog.maxProcesses" label="Max processes shown" type="number" min="5" max="500" />
           </v-form>
         </v-card-text>
         <v-card-actions>
@@ -194,13 +158,13 @@ const settingsDialog = reactive({
 });
 
 const columns = [
-  { field: 'pid',     label: 'PID',      sortable: true },
-  { field: 'user',    label: 'User',     sortable: false },
-  { field: 'cpu',     label: 'CPU%',     sortable: true },
-  { field: 'mem',     label: 'MEM%',     sortable: true },
-  { field: 'res',     label: 'RES',      sortable: false },
-  { field: 's',       label: 'S',        sortable: false },
-  { field: 'command', label: 'Command',  sortable: false },
+  { field: 'pid', label: 'PID', sortable: true },
+  { field: 'user', label: 'User', sortable: false },
+  { field: 'cpu', label: 'CPU%', sortable: true },
+  { field: 'mem', label: 'MEM%', sortable: true },
+  { field: 'res', label: 'RES', sortable: false },
+  { field: 's', label: 'S', sortable: false },
+  { field: 'command', label: 'Command', sortable: false },
 ];
 
 const getAuthHeaders = () => ({
@@ -247,8 +211,8 @@ const parseTopOutput = (output) => {
       const uptimeMatch = line.match(/up (.+?),\s*\d+ user/);
       result.header = {
         uptime: uptimeMatch ? uptimeMatch[1].trim() : '',
-        load1:  loadMatch ? parseFloat(loadMatch[1]) : 0,
-        load5:  loadMatch ? parseFloat(loadMatch[2]) : 0,
+        load1: loadMatch ? parseFloat(loadMatch[1]) : 0,
+        load5: loadMatch ? parseFloat(loadMatch[2]) : 0,
         load15: loadMatch ? parseFloat(loadMatch[3]) : 0,
       };
     } else if (line.startsWith('Tasks:') || line.startsWith('Threads:')) {
@@ -272,17 +236,17 @@ const parseTopOutput = (output) => {
       });
     } else if (line.match(/^(MiB )?Mem\s*:/)) {
       const totalM = line.match(/([\d.]+)\s*total/);
-      const usedM  = line.match(/([\d.]+)\s*used/);
+      const usedM = line.match(/([\d.]+)\s*used/);
       result.mem = {
         total: totalM ? parseFloat(totalM[1]) : 0,
-        used:  usedM  ? parseFloat(usedM[1])  : 0,
+        used: usedM ? parseFloat(usedM[1]) : 0,
       };
     } else if (line.match(/^(MiB )?Swap\s*:/)) {
       const totalM = line.match(/([\d.]+)\s*total/);
-      const usedM  = line.match(/([\d.]+)\s*used/);
+      const usedM = line.match(/([\d.]+)\s*used/);
       result.swap = {
         total: totalM ? parseFloat(totalM[1]) : 0,
-        used:  usedM  ? parseFloat(usedM[1])  : 0,
+        used: usedM ? parseFloat(usedM[1]) : 0,
       };
     } else if (line.match(/^\s*PID\s+USER/)) {
       inProcessSection = true;
@@ -290,17 +254,17 @@ const parseTopOutput = (output) => {
       const parts = line.trim().split(/\s+/);
       if (parts.length >= 11 && /^\d+$/.test(parts[0])) {
         result.processes.push({
-          pid:     parseInt(parts[0]),
-          user:    parts[1],
-          pr:      parts[2],
-          ni:      parts[3],
-          virt:    parts[4],
-          res:     parts[5],
-          shr:     parts[6],
-          s:       parts[7],
-          cpu:     parseFloat(parts[8])  || 0,
-          mem:     parseFloat(parts[9])  || 0,
-          time:    parts[10],
+          pid: parseInt(parts[0]),
+          user: parts[1],
+          pr: parts[2],
+          ni: parts[3],
+          virt: parts[4],
+          res: parts[5],
+          shr: parts[6],
+          s: parts[7],
+          cpu: parseFloat(parts[8]) || 0,
+          mem: parseFloat(parts[9]) || 0,
+          time: parts[10],
           command: parts.slice(11).join(' '),
         });
       }
@@ -318,7 +282,7 @@ const fetchSettings = async () => {
     if (res.ok) {
       const data = await res.json();
       settings.value = {
-        interval:    data.interval    || 2,
+        interval: data.interval || 2,
         maxProcesses: data.maxProcesses || 50,
       };
     }
@@ -333,9 +297,9 @@ const fetchSystemData = async () => {
       method: 'POST',
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        command:    'top',
-        args:       ['-b', '-n', '1', '-1', '-w', '512'],
-        timeout:    8,
+        command: 'top',
+        args: ['-b', '-n', '1', '-1', '-w', '512'],
+        timeout: 8,
         parse_json: false,
       }),
     });
@@ -363,10 +327,10 @@ const stopPolling = () => {
 };
 
 const openSettingsDialog = () => {
-  settingsDialog.interval     = settings.value.interval;
+  settingsDialog.interval = settings.value.interval;
   settingsDialog.maxProcesses = settings.value.maxProcesses;
-  settingsDialog.saving       = false;
-  settingsDialog.value        = true;
+  settingsDialog.saving = false;
+  settingsDialog.value = true;
 };
 
 const saveSettings = async () => {
@@ -377,13 +341,13 @@ const saveSettings = async () => {
       method: 'POST',
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        interval:     settingsDialog.interval,
+        interval: settingsDialog.interval,
         maxProcesses: settingsDialog.maxProcesses,
       }),
     });
     if (res.ok) {
       settings.value = {
-        interval:     settingsDialog.interval,
+        interval: settingsDialog.interval,
         maxProcesses: settingsDialog.maxProcesses,
       };
       settingsDialog.value = false;
