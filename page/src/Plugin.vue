@@ -131,7 +131,7 @@ const wifiInstallMessage = ref('');
 const lastExitCode = ref(null);
 const timedOut = ref(false);
 
-const showOutput = computed(() => wifiInstallMessage.value && wifiInstallMessage.value.length > 100);
+const showOutput = computed(() => Boolean(wifiInstallMessage.value));
 
 const installStatus = computed(() => {
   if (timedOut.value) return 'warning';
@@ -176,16 +176,18 @@ const installWifiDrivers = async () => {
       }),
     });
 
+    const data = await res.json();
+
     if (!res.ok) {
-      wifiInstallMessage.value = 'Treiberinstallation fehlgeschlagen.';
-      lastExitCode.value = 1;
+      wifiInstallMessage.value = data.output || data.message || 'Treiberinstallation fehlgeschlagen.';
+      lastExitCode.value = typeof data.exit_code === 'number' ? data.exit_code : 1;
+      timedOut.value = Boolean(data.timed_out);
       return;
     }
 
-    const data = await res.json();
     wifiInstallMessage.value = data.output || 'Treiberinstallation abgeschlossen.';
-    lastExitCode.value = data.exit_code || 0;
-    timedOut.value = data.timed_out || false;
+    lastExitCode.value = typeof data.exit_code === 'number' ? data.exit_code : 0;
+    timedOut.value = Boolean(data.timed_out);
   } catch (e) {
     console.error('Failed to install WiFi drivers:', e);
     wifiInstallMessage.value = `Fehler: ${e.message}`;
