@@ -2,6 +2,7 @@
 set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
+SCRIPT_VERSION="2026-05-12a"
 
 PACKAGES=(
   wireless-regdb
@@ -23,6 +24,19 @@ MODULES=(
 
 log() {
   echo "[mos-wifi] $*"
+}
+
+report_wifi_interfaces() {
+  local wlan_ifaces
+  wlan_ifaces="$(ip -o link show 2>/dev/null | awk -F': ' '/^[0-9]+: wl/{print $2}')"
+
+  if [[ -n "${wlan_ifaces}" ]]; then
+    log "WLAN-Interface(s) erkannt: ${wlan_ifaces//$'\n'/, }"
+    return
+  fi
+
+  log "Kein WLAN-Interface (wl*) erkannt."
+  log "Hinweis: Der Adapter ist evtl. sichtbar, aber ohne passenden Kernel-Treiber gebunden."
 }
 
 detect_usb_wifi_adapter_status() {
@@ -69,6 +83,8 @@ if ! command -v apt-get >/dev/null 2>&1; then
   exit 1
 fi
 
+log "Installer-Version: ${SCRIPT_VERSION}"
+
 log "Aktualisiere Paketlisten..."
 echo y | apt-get update || {
   log "Fehler beim apt-get update (dpkg gesperrt?). Versuche spaeter erneut."
@@ -112,5 +128,7 @@ if command -v modprobe >/dev/null 2>&1; then
     log "Kein Kernel-Modulverzeichnis gefunden ($KERNEL_MODULE_DIR), ueberspringe modprobe."
   fi
 fi
+
+report_wifi_interfaces
 
 log "WLAN-Treiberinstallation abgeschlossen."
