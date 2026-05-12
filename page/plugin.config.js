@@ -3,7 +3,7 @@ export default {
   displayName: 'WiFi Treiber für MOS',
   description: 'Installiert WiFi-Firmware und Treiber im MOS-Container',
   version: '0.0.1',
-  icon: 'https://raw.githubusercontent.com/s3ppo/mos_wifi/main/page/assets/wifi-icon.svg',
+  icon: 'https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/png/google-wifi.png',
   category: ['Driver'],
   architecture: ['amd64'],
   driver: true,
