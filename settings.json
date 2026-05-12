@@ -1,4 +1,4 @@
 {
-  "gpus": [],
-  "interval": 2
+  "installOnStart": true,
+  "installOnOsUpdate": true
 }

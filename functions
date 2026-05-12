@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+INSTALLER_BIN="/usr/bin/plugins/mos-wifi-driver-install"
+
+run_wifi_install() {
+  if [[ -x "$INSTALLER_BIN" ]]; then
+    "$INSTALLER_BIN" || true
+  fi
+}
+
+install() {
+  run_wifi_install
+}
+
+plugin_update() {
+  run_wifi_install
+}
+
+mos_start() {
+  run_wifi_install
+}
+
+mos_osupdate() {
+  run_wifi_install
+}
+
+uninstall() {
+  true
+}
