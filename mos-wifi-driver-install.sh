@@ -4,22 +4,17 @@ set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
 PACKAGES=(
-  firmware-iwlwifi
-  firmware-realtek
-  firmware-atheros
-  firmware-brcm80211
   wireless-regdb
   iw
   wpasupplicant
+  crda
 )
 
 MODULES=(
   cfg80211
   mac80211
-  iwlwifi
-  brcmfmac
   ath9k
-  rtw88_core
+  iwlwifi
 )
 
 log() {
