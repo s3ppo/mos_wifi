@@ -4,15 +4,15 @@
     <div v-else style="margin-bottom: 80px">
       <!-- Header -->
       <div class="mb-6">
-        <h2 class="text-h5 font-weight-bold mb-2">WiFi Treiber und Firmware</h2>
-        <p class="text-body2 text-medium-emphasis">Installiert häufig verwendete WLAN-Firmware und Treiber</p>
+        <h2 class="text-h5 font-weight-bold mb-2">{{ t('header.title') }}</h2>
+        <p class="text-body2 text-medium-emphasis">{{ t('header.subtitle') }}</p>
       </div>
 
       <!-- Main Action Card -->
       <v-card class="mb-6" elevation="2">
         <v-card-title class="bg-light d-flex align-center flex-wrap gap-3">
           <v-icon large color="primary">mdi-wifi</v-icon>
-          <span>Installation</span>
+          <span>{{ t('actions.installation') }}</span>
           <v-spacer />
           <v-btn 
             color="primary" 
@@ -22,7 +22,7 @@
             :disabled="wifiInstallRunning"
           >
             <v-icon start>mdi-download</v-icon>
-            Installieren
+            {{ t('actions.install') }}
           </v-btn>
         </v-card-title>
 
@@ -59,7 +59,7 @@
             </div>
           </div>
           <div v-else class="text-caption text-medium-emphasis">
-            Klicke auf "Installieren" um die WLAN-Treiber zu installieren.
+            {{ t('messages.initialPrompt') }}
           </div>
         </v-card-text>
       </v-card>
@@ -70,7 +70,7 @@
           <v-card elevation="1">
             <v-card-title class="text-body2 font-weight-bold pa-3 bg-light">
               <v-icon start small>mdi-package</v-icon>
-              Enthaltene Treiber
+              {{ t('sections.includedDrivers') }}
             </v-card-title>
             <v-card-text class="pa-3">
               <ul class="text-caption" style="margin: 0; padding-left: 20px;">
@@ -88,16 +88,16 @@
           <v-card elevation="1">
             <v-card-title class="text-body2 font-weight-bold pa-3 bg-light">
               <v-icon start small>mdi-information</v-icon>
-              Information
+              {{ t('sections.information') }}
             </v-card-title>
             <v-card-text class="pa-3 text-caption">
               <p class="mb-2">
-                Der Installer wird automatisch ausgeführt bei:
+                {{ t('sections.installerRunsAt') }}
               </p>
               <ul style="margin: 0; padding-left: 20px;">
-                <li>Plugin-Installation</li>
-                <li>Systembeginn</li>
-                <li>OS-Updates</li>
+                <li>{{ t('sections.pluginInstallation') }}</li>
+                <li>{{ t('sections.systemStart') }}</li>
+                <li>{{ t('sections.osUpdates') }}</li>
               </ul>
             </v-card-text>
           </v-card>
@@ -109,12 +109,12 @@
         <v-card-text class="pa-3 text-center">
           <a href="https://github.com/s3ppo/mos_wifi" target="_blank" class="text-decoration-none mx-2">
             <v-icon small>mdi-github</v-icon>
-            GitHub Repository
+            {{ t('links.githubRepository') }}
           </a>
           <span class="text-medium-emphasis mx-2">•</span>
           <a href="https://github.com/s3ppo/mos_wifi/issues" target="_blank" class="text-decoration-none mx-2">
             <v-icon small>mdi-bug</v-icon>
-            Support
+            {{ t('links.support') }}
           </a>
         </v-card-text>
       </v-card>
@@ -131,6 +131,108 @@ const wifiInstallMessage = ref('');
 const lastExitCode = ref(null);
 const timedOut = ref(false);
 
+const messages = {
+  de: {
+    header: {
+      title: 'WiFi Treiber und Firmware',
+      subtitle: 'Installiert haeufig verwendete WLAN-Firmware und Treiber',
+    },
+    actions: {
+      installation: 'Installation',
+      install: 'Installieren',
+    },
+    messages: {
+      initialPrompt: 'Klicke auf "Installieren", um die WLAN-Treiber zu installieren.',
+      timeout: 'Installation laeuft noch (Timeout nach {seconds}s)',
+      success: 'Installation erfolgreich abgeschlossen',
+      failed: 'Installation fehlgeschlagen',
+      running: 'Installation laeuft...',
+      installFailed: 'Treiberinstallation fehlgeschlagen.',
+      installComplete: 'Treiberinstallation abgeschlossen.',
+      errorPrefix: 'Fehler',
+    },
+    sections: {
+      includedDrivers: 'Enthaltene Treiber',
+      information: 'Information',
+      installerRunsAt: 'Der Installer wird automatisch ausgefuehrt bei:',
+      pluginInstallation: 'Plugin-Installation',
+      systemStart: 'Systembeginn',
+      osUpdates: 'OS-Updates',
+    },
+    links: {
+      githubRepository: 'GitHub Repository',
+      support: 'Support',
+    },
+  },
+  en: {
+    header: {
+      title: 'WiFi Drivers and Firmware',
+      subtitle: 'Installs commonly used WLAN firmware and drivers',
+    },
+    actions: {
+      installation: 'Installation',
+      install: 'Install',
+    },
+    messages: {
+      initialPrompt: 'Click "Install" to install WLAN drivers.',
+      timeout: 'Installation is still running (timeout after {seconds}s)',
+      success: 'Installation completed successfully',
+      failed: 'Installation failed',
+      running: 'Installation in progress...',
+      installFailed: 'Driver installation failed.',
+      installComplete: 'Driver installation completed.',
+      errorPrefix: 'Error',
+    },
+    sections: {
+      includedDrivers: 'Included Drivers',
+      information: 'Information',
+      installerRunsAt: 'The installer is run automatically on:',
+      pluginInstallation: 'Plugin installation',
+      systemStart: 'System start',
+      osUpdates: 'OS updates',
+    },
+    links: {
+      githubRepository: 'GitHub Repository',
+      support: 'Support',
+    },
+  },
+};
+
+const supportedLocales = ['de', 'en'];
+const fallbackLocale = 'de';
+
+const resolveLocale = () => {
+  const htmlLang = (document?.documentElement?.lang || '').toLowerCase();
+  const browserLang = (navigator?.language || '').toLowerCase();
+  const localeCandidate = htmlLang || browserLang;
+  const baseLocale = localeCandidate.split('-')[0];
+  return supportedLocales.includes(baseLocale) ? baseLocale : fallbackLocale;
+};
+
+const currentLocale = ref(resolveLocale());
+
+const t = (key, params = {}) => {
+  const path = key.split('.');
+  let value = messages[currentLocale.value];
+
+  for (const segment of path) {
+    value = value?.[segment];
+    if (value === undefined) break;
+  }
+
+  if (value === undefined) {
+    value = path.reduce((acc, segment) => acc?.[segment], messages[fallbackLocale]) ?? key;
+  }
+
+  if (typeof value !== 'string') return key;
+
+  return value.replace(/\{(\w+)\}/g, (_, placeholder) => {
+    return Object.prototype.hasOwnProperty.call(params, placeholder)
+      ? String(params[placeholder])
+      : `{${placeholder}}`;
+  });
+};
+
 const showOutput = computed(() => Boolean(wifiInstallMessage.value));
 
 const installStatus = computed(() => {
@@ -141,10 +243,10 @@ const installStatus = computed(() => {
 });
 
 const getStatusMessage = () => {
-  if (timedOut.value) return '⏱️ Installation läuft noch (Timeout nach 600s)';
-  if (lastExitCode.value === 0) return '✓ Installation erfolgreich abgeschlossen';
-  if (lastExitCode.value !== null && lastExitCode.value !== 0) return '✗ Installation fehlgeschlagen';
-  return 'Installation läuft...';
+  if (timedOut.value) return t('messages.timeout', { seconds: 600 });
+  if (lastExitCode.value === 0) return t('messages.success');
+  if (lastExitCode.value !== null && lastExitCode.value !== 0) return t('messages.failed');
+  return t('messages.running');
 };
 
 const getStatusIcon = () => {
@@ -179,18 +281,18 @@ const installWifiDrivers = async () => {
     const data = await res.json();
 
     if (!res.ok) {
-      wifiInstallMessage.value = data.output || data.message || 'Treiberinstallation fehlgeschlagen.';
+      wifiInstallMessage.value = data.output || data.message || t('messages.installFailed');
       lastExitCode.value = typeof data.exit_code === 'number' ? data.exit_code : 1;
       timedOut.value = Boolean(data.timed_out);
       return;
     }
 
-    wifiInstallMessage.value = data.output || 'Treiberinstallation abgeschlossen.';
+    wifiInstallMessage.value = data.output || t('messages.installComplete');
     lastExitCode.value = typeof data.exit_code === 'number' ? data.exit_code : 0;
     timedOut.value = Boolean(data.timed_out);
   } catch (e) {
     console.error('Failed to install WiFi drivers:', e);
-    wifiInstallMessage.value = `Fehler: ${e.message}`;
+    wifiInstallMessage.value = `${t('messages.errorPrefix')}: ${e.message}`;
     lastExitCode.value = 1;
   } finally {
     wifiInstallRunning.value = false;
