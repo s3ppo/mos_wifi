@@ -1,0 +1,29 @@
+{
+  "plugin_wifi": {
+    "title": "WiFi Drivers and Firmware",
+    "description": "Installs commonly used WLAN firmware and drivers",
+    "installation": "Installation",
+    "install": "Install",
+    "initial_prompt": "Click \"Install\" to install WLAN drivers.",
+    "included_drivers": "Included Drivers",
+    "driver_intel": "Intel WiFi (iwlwifi)",
+    "driver_realtek": "Realtek WiFi",
+    "driver_atheros": "Atheros (ATH9K)",
+    "driver_broadcom": "Broadcom (brcmfmac)",
+    "driver_regulatory_database": "Regulatory Database",
+    "information": "Information",
+    "installer_runs_at": "The installer is run automatically on:",
+    "plugin_installation": "Plugin installation",
+    "system_start": "System start",
+    "os_updates": "OS updates",
+    "github_repository": "GitHub Repository",
+    "support": "Support",
+    "timeout": "Installation is still running (timeout after {seconds}s)",
+    "success": "Installation completed successfully",
+    "failed": "Installation failed",
+    "running": "Installation in progress...",
+    "install_failed": "Driver installation failed.",
+    "install_complete": "Driver installation completed.",
+    "error_prefix": "Error"
+  }
+}

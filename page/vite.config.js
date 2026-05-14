@@ -54,6 +54,7 @@ export default defineConfig({
       filename: 'remoteEntry.js',
       exposes: {
         './Plugin': './src/Plugin.vue',
+        './Locales': './src/locales/index.js',
       },
       shared: ['vue'],
     }),

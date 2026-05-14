@@ -1,0 +1,29 @@
+{
+  "plugin_wifi": {
+    "title": "WiFi Treiber und Firmware",
+    "description": "Installiert haeufig verwendete WLAN-Firmware und Treiber",
+    "installation": "Installation",
+    "install": "Installieren",
+    "initial_prompt": "Klicke auf \"Installieren\", um die WLAN-Treiber zu installieren.",
+    "included_drivers": "Enthaltene Treiber",
+    "driver_intel": "Intel WiFi (iwlwifi)",
+    "driver_realtek": "Realtek WLAN",
+    "driver_atheros": "Atheros (ATH9K)",
+    "driver_broadcom": "Broadcom (brcmfmac)",
+    "driver_regulatory_database": "Regulatorische Datenbank",
+    "information": "Information",
+    "installer_runs_at": "Der Installer wird automatisch ausgefuehrt bei:",
+    "plugin_installation": "Plugin-Installation",
+    "system_start": "Systembeginn",
+    "os_updates": "OS-Updates",
+    "github_repository": "GitHub Repository",
+    "support": "Support",
+    "timeout": "Installation laeuft noch (Timeout nach {seconds}s)",
+    "success": "Installation erfolgreich abgeschlossen",
+    "failed": "Installation fehlgeschlagen",
+    "running": "Installation laeuft...",
+    "install_failed": "Treiberinstallation fehlgeschlagen.",
+    "install_complete": "Treiberinstallation abgeschlossen.",
+    "error_prefix": "Fehler"
+  }
+}
