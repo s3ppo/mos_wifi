@@ -2,14 +2,16 @@
 set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
-SCRIPT_VERSION="2026-05-12c"
+SCRIPT_VERSION="2026-06-12a"
 
+# Base packages
 PACKAGES=(
   wireless-regdb
   iw
   wpasupplicant
 )
 
+# Expected kernel modules (loaded after driver package install)
 MODULES=(
   cfg80211
   mac80211
@@ -21,6 +23,11 @@ MODULES=(
   ath9k
   iwlwifi
 )
+
+# Plugin/Driver configuration
+PLG_NAME="mos-wifi-driver"
+DRV_PLG_DIR="/boot/optional/drivers/$PLG_NAME"
+DRIVER_PKG="mos-wifi-modules"
 
 log() {
   echo "[mos-wifi] $*"
@@ -152,64 +159,152 @@ detect_usb_wifi_adapter_status() {
   fi
 }
 
+check_modules_already_installed() {
+  # Check if wifi modules are already available (built into kernel or previously installed)
+  for module in cfg80211 mac80211; do
+    if modinfo "$module" >/dev/null 2>&1; then
+      log "WLAN-Kernelmodule bereits vorhanden (einkompiliert oder installiert)."
+      return 0
+    fi
+  done
+  return 1
+}
+
+download_driver_deb() {
+  local UNAME="$1"
+  local DRV_DIR="$DRV_PLG_DIR/$UNAME"
+  
+  # TODO: Implement GitHub API download similar to ZFS plugin
+  # For now, this is a placeholder - requires GitHub release setup
+  log "Download von GitHub Releases (noch nicht implementiert)."
+  return 1
+}
+
+check_and_install_driver_package() {
+  local UNAME
+  local DRV_DIR
+  local DRIVER_DEB
+  local CUSTOM_PATH="$1"
+  
+  UNAME="$(uname -r)"
+  DRV_DIR="$DRV_PLG_DIR/$UNAME"
+  
+  # First: Check if modules are already available
+  if check_modules_already_installed; then
+    return 0
+  fi
+  
+  # Second: If custom path provided, try to use it
+  if [[ -n "$CUSTOM_PATH" ]]; then
+    if [[ -f "$CUSTOM_PATH" ]]; then
+      log "Installiere WiFi-Treiber-Paket von: $CUSTOM_PATH"
+      dpkg -i "$CUSTOM_PATH" >/dev/null 2>&1 || {
+        log "FEHLER: Treiber-Paket-Installation fehlgeschlagen."
+        return 1
+      }
+      
+      # Rebuild kernel module dependencies
+      depmod --all >/dev/null 2>&1 || true
+      udevadm trigger >/dev/null 2>&1 || true
+      udevadm settle --timeout=15 >/dev/null 2>&1 || true
+      
+      log "Treiber-Paket erfolgreich installiert."
+      return 0
+    else
+      log "FEHLER: Datei nicht gefunden: $CUSTOM_PATH"
+      return 1
+    fi
+  fi
+  
+  # Third: Check if driver package exists locally in default location
+  if DRIVER_DEB=$(ls -1 "$DRV_DIR"/*.deb 2>/dev/null | sort -V | tail -1); then
+    log "Installiere WiFi-Treiber-Paket: $(basename "$DRIVER_DEB")"
+    dpkg -i "$DRIVER_DEB" >/dev/null 2>&1 || {
+      log "FEHLER: Treiber-Paket-Installation fehlgeschlagen."
+      return 1
+    }
+    
+    # Rebuild kernel module dependencies
+    depmod --all >/dev/null 2>&1 || true
+    udevadm trigger >/dev/null 2>&1 || true
+    udevadm settle --timeout=15 >/dev/null 2>&1 || true
+    
+    log "Treiber-Paket erfolgreich installiert."
+    return 0
+  fi
+  
+  # Fourth: Try to download from GitHub (requires release setup)
+  log "Versuche, WiFi-Treiber-Paket von GitHub herunterzuladen..."
+  if download_driver_deb "$UNAME"; then
+    return 0
+  fi
+  
+  # No driver package found
+  log "FEHLER: Kein WiFi-Treiber-Paket verfuegbar."
+  return 1
+}
+
+load_kernel_modules() {
+  if ! command -v modprobe >/dev/null 2>&1; then
+    return
+  fi
+  
+  local KERNEL_MODULE_DIR
+  KERNEL_MODULE_DIR="/lib/modules/$(uname -r)"
+  
+  if [[ ! -d "$KERNEL_MODULE_DIR" ]]; then
+    log "Kernel-Modulverzeichnis nicht gefunden ($KERNEL_MODULE_DIR)"
+    return
+  fi
+  
+  log "Lade WLAN-Kernelmodule..."
+  for module in "${MODULES[@]}"; do
+    if modinfo "$module" >/dev/null 2>&1; then
+      modprobe "$module" || log "Warnung: Modul $module konnte nicht geladen werden"
+    fi
+  done
+}
+
 if [[ "${EUID}" -ne 0 ]]; then
   log "Dieses Skript muss als root ausgefuehrt werden."
   exit 1
 fi
 
 if ! command -v apt-get >/dev/null 2>&1; then
-  log "apt-get ist nicht verfuegbar. Treiberinstallation uebersprungen."
+  log "apt-get ist nicht verfuegbar."
   exit 1
 fi
 
 log "Installer-Version: ${SCRIPT_VERSION}"
-report_kernel_build_env
 report_kernel_wireless_support
 
 log "Aktualisiere Paketlisten..."
-echo y | apt-get update || {
-  log "Fehler beim apt-get update (dpkg gesperrt?). Versuche spaeter erneut."
-  exit 0
+apt-get update >/dev/null 2>&1 || {
+  log "Warnung: apt-get update fehlgeschlagen (dpkg gesperrt?)"
 }
 
-AVAILABLE_PACKAGES=()
-for pkg in "${PACKAGES[@]}"; do
-  if apt-cache show "$pkg" >/dev/null 2>&1; then
-    AVAILABLE_PACKAGES+=("$pkg")
-  else
-    log "Paket nicht verfuegbar, ueberspringe: $pkg"
-  fi
-done
+# Install base packages
+log "Installiere WiFi-Basis-Pakete (firmware, tools)..."
+apt-get install -y --no-install-recommends "${PACKAGES[@]}" >/dev/null 2>&1 || {
+  log "Warnung: Einige Basis-Pakete konnten nicht installiert werden."
+}
 
-if [[ "${#AVAILABLE_PACKAGES[@]}" -eq 0 ]]; then
-  log "Keine installierbaren WLAN-Pakete gefunden."
-  exit 0
+# Check and install kernel-specific driver package
+if ! check_and_install_driver_package "$1"; then
+  log "FEHLER: WLAN-Treiber nicht verfuegbar."
+  log ""
+  log "Moegliche Loesungen:"
+  log "1. Pfad eingeben: Geben Sie den Pfad zur .deb-Datei ueber die Plugin-Oberflaeche ein"
+  log "2. Lokal: .deb-Paket unter $DRV_PLG_DIR/\$(uname -r)/ bereitstellen"
+  log "3. Download: GitHub-Release als Quelle konfigurieren (siehe Dokumentation)"
+  log "4. Kernel: Treiber-Module koennen auch im Kernel einkompiliert sein"
+  log ""
+  log "Kontaktiere den Administrator fuer Unterstuetzung."
+  exit 1
 fi
-
-log "Installiere WLAN-Treiber/Firmware-Pakete..."
-echo y | apt-get install -y --no-install-recommends "${AVAILABLE_PACKAGES[@]}" || {
-  log "Fehler bei der Installation (dpkg gesperrt?). Versuche spaeter erneut."
-  exit 0
-}
 
 detect_usb_wifi_adapter_status
-
-if command -v modprobe >/dev/null 2>&1; then
-  KERNEL_MODULE_DIR="/lib/modules/$(uname -r)"
-  if [[ -d "$KERNEL_MODULE_DIR" ]]; then
-    log "Lade haeufige WLAN-Kernelmodule, falls vorhanden..."
-    for module in "${MODULES[@]}"; do
-      if modinfo "$module" >/dev/null 2>&1; then
-        modprobe "$module" || true
-      else
-        log "Kernelmodul nicht verfuegbar, ueberspringe: $module"
-      fi
-    done
-  else
-    log "Kein Kernel-Modulverzeichnis gefunden ($KERNEL_MODULE_DIR), ueberspringe modprobe."
-  fi
-fi
-
+load_kernel_modules
 report_wifi_interfaces
 
 log "WLAN-Treiberinstallation abgeschlossen."

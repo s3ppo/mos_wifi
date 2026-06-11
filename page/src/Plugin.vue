@@ -26,6 +26,28 @@
           </v-btn>
         </v-card-title>
 
+        <!-- Driver Package Path Configuration -->
+        <v-card-text class="pa-4 border-bottom">
+          <div class="mb-4">
+            <label class="text-body2 font-weight-bold mb-2 d-block">
+              <v-icon x-small>mdi-folder</v-icon>
+              Pfad zur WiFi-Treiber .deb Datei
+            </label>
+            <p class="text-caption text-medium-emphasis mb-3">
+              Optionales Eingabefeld um einen benutzerdefinierten Pfad zur .deb Datei anzugeben. Wenn leer, wird automatisch nach der Datei gesucht.
+            </p>
+            <v-text-field
+              v-model="debFilePath"
+              placeholder="/boot/optional/drivers/mos-wifi-driver/6.1.0-mos/mos-wifi-modules-1.0.deb"
+              hint="Beispiel: /pfad/zur/mos-wifi-modules-*.deb"
+              variant="outlined"
+              density="compact"
+              clearable
+              :disabled="wifiInstallRunning"
+            />
+          </div>
+        </v-card-text>
+
         <!-- Status/Output -->
         <v-card-text class="pa-4">
           <div v-if="wifiInstallMessage" class="mb-4">
@@ -130,6 +152,7 @@ const wifiInstallRunning = ref(false);
 const wifiInstallMessage = ref('');
 const lastExitCode = ref(null);
 const timedOut = ref(false);
+const debFilePath = ref('');
 
 const instance = getCurrentInstance();
 
@@ -176,12 +199,15 @@ const installWifiDrivers = async () => {
   timedOut.value = false;
 
   try {
+    // Prepare arguments: pass the DEB path if provided
+    const args = debFilePath.value ? [debFilePath.value] : [];
+
     const res = await fetch('/api/v1/mos/plugins/query', {
       method: 'POST',
       headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify({
         command: 'mos-wifi-driver-install',
-        args: [],
+        args: args,
         timeout: 600,
         parse_json: false,
       }),
