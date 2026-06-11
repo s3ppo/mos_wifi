@@ -1,24 +1,31 @@
-# MOS WiFi Drivers
+# MOS Nethogs Network Monitor
 
-MOS WiFi Drivers provides a **MOS plugin** to install common WiFi
-firmware and driver packages inside the MOS environment.
+MOS Nethogs provides a **MOS plugin** to install Nethogs and other network
+monitoring tools inside the MOS environment.
 
 ---
 
 ## Overview
 
-This repository contains the **MOS plugin implementation**, optional helper
-functions, configuration files (such as `settings.json`)
+This repository contains the **MOS plugin implementation**, configuration files
+(such as `settings.json`), and installer scripts for network monitoring tools.
 
-## WiFi Driver Installation
+## Nethogs Installation
 
-Das Plugin paketiert ein zusaetzliches Skript zur WLAN-Treiberinstallation.
-Bei der Installation des Plugin-Pakets wird dieses Skript automatisch ausgefuehrt
-und kann zusaetzlich im Plugin-UI manuell gestartet werden.
+Das Plugin paketiert ein Installationsskript zur Installation von Nethogs und weiteren
+Netzwerk-Überwachungstools. Bei der Installation des Plugin-Pakets wird dieses Skript
+automatisch ausgefuehrt und kann zusaetzlich im Plugin-UI manuell gestartet werden.
 
 Zusaetzlich ist eine `functions`-Datei enthalten, die die MOS-Lifecycle-Hooks
 `install`, `plugin_update`, `mos_start` und `mos_osupdate` bereitstellt,
-damit die WLAN-Treiberinstallation auch bei Start/Update erneut ausgefuehrt werden kann.
+damit die Installation auch bei Start/Update erneut ausgefuehrt werden kann.
+
+### Installed Tools
+
+- **Nethogs**: Real-time network traffic monitor per process
+- **iftop**: Interactive network bandwidth monitor
+- **vnstat**: Network traffic statistics
+- **bmon**: Visual bandwidth monitor
 
 ---
 
@@ -46,3 +53,4 @@ Packaged components remain licensed under their original upstream licenses.
 
 Refer to `THIRD_PARTY.md` for details.
 
+# mos-nethogs
