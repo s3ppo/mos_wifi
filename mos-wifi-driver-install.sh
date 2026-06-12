@@ -4,7 +4,7 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
-SCRIPT_VERSION="2026-06-12b"
+SCRIPT_VERSION="2026-06-12c"
 
 # Base packages
 PACKAGES=(
@@ -36,6 +36,17 @@ DRIVER_PKG="mos-wifi-modules"
 # Fallback: ich777/mos-kernel (upstream, once WiFi modules are added there)
 GITHUB_REPO_PRIMARY="Mainfrezzer/mos-kernel"
 GITHUB_REPO_FALLBACK="ich777/mos-kernel"
+
+# MOS wraps /usr/bin/apt-get with an interactive confirmation prompt.
+# For non-interactive use (postinst, mos_start, etc.) we call the original binary directly.
+if [[ -x "/usr/bin/apt-get.orig" ]]; then
+    APT_GET="/usr/bin/apt-get.orig"
+elif command -v apt-get >/dev/null 2>&1; then
+    APT_GET="apt-get"
+else
+    echo "[mos-wifi] apt-get ist nicht verfuegbar."
+    exit 1
+fi
 
 log() {
     echo "[mos-wifi] $*"
@@ -137,21 +148,13 @@ check_modules_already_installed() {
     return 1
 }
 
-# Sucht in einem GitHub-Release nach einem .deb das zur aktuellen Kernel-Version passt.
-# Strategie:
-#   1. Exakter Match: Dateiname enthaelt genau "$(uname -r)"
-#   2. Versionsmatch: Dateiname enthaelt die Kernel-Basisversion (z.B. "6.18.35")
-#      Das deckt Faelle ab wo der Dateiname "mos-wifi-modules_6.18.35-mos_amd64.deb" heisst
-#      aber uname -r "6.18.35-mos-custom" liefert.
 _find_deb_url_in_release() {
     local release_json="$1"
     local uname="$2"
 
-    # Kernel-Basisversion extrahieren (z.B. "6.18.35" aus "6.18.35-mos")
     local base_ver
     base_ver="$(echo "$uname" | grep -oP '^\d+\.\d+\.\d+')"
 
-    # Alle .deb Asset-URLs aus dem JSON extrahieren
     local all_debs
     all_debs="$(echo "$release_json" | \
         grep -o '"browser_download_url": *"[^"]*\.deb"' | \
@@ -161,7 +164,7 @@ _find_deb_url_in_release() {
         return 1
     fi
 
-    # Prioritaet 1: Exakter uname -r Match im Dateinamen
+    # Prioritaet 1: Exakter uname -r Match + wifi/modules im Namen
     local exact_match
     exact_match="$(echo "$all_debs" | grep -F "${uname}" | grep -i 'wifi\|wireless\|wlan\|modules' | head -1)"
     if [[ -n "$exact_match" ]]; then
@@ -180,7 +183,6 @@ _find_deb_url_in_release() {
     fi
 
     # Prioritaet 3: Irgendein .deb mit wifi/wireless/wlan/modules im Namen
-    # (als letzter Ausweg, falls Namensschema unbekannt)
     local generic_match
     generic_match="$(echo "$all_debs" | grep -i 'wifi\|wireless\|wlan\|modules' | head -1)"
     if [[ -n "$generic_match" ]]; then
@@ -192,7 +194,6 @@ _find_deb_url_in_release() {
     return 1
 }
 
-# Versucht, das WiFi-Modul-.deb von einem GitHub-Repo herunterzuladen und zu installieren.
 _download_and_install_from_repo() {
     local repo="$1"
     local uname="$2"
@@ -207,7 +208,6 @@ _download_and_install_from_repo() {
         return 1
     }
 
-    # Sicherstellen dass es ein gueltiges JSON-Release ist
     if ! echo "$release_json" | grep -q '"tag_name"'; then
         log "Kein gueltiges Release gefunden in: ${repo}"
         return 1
@@ -220,6 +220,7 @@ _download_and_install_from_repo() {
     local deb_url
     if ! deb_url="$(_find_deb_url_in_release "$release_json" "$uname")"; then
         log "Kein passendes WiFi-Modul-.deb fuer Kernel ${uname} in Release ${release_tag}."
+        log "Hinweis: Das Modul-Paket fuer diesen Kernel ist noch nicht veroeffentlicht."
         return 1
     fi
 
@@ -254,12 +255,10 @@ download_driver_deb() {
     local uname="$1"
     local drv_dir="$DRV_PLG_DIR/$uname"
 
-    # Primaerquelle: Mainfrezzer/mos-kernel (MOS-Kernel-Fork mit WLAN-Support)
     if _download_and_install_from_repo "$GITHUB_REPO_PRIMARY" "$uname" "$drv_dir"; then
         return 0
     fi
 
-    # Fallback: ich777/mos-kernel (Upstream, sobald Module dort verfuegbar sind)
     log "Primaerquelle nicht verfuegbar, versuche Fallback: ${GITHUB_REPO_FALLBACK}..."
     if _download_and_install_from_repo "$GITHUB_REPO_FALLBACK" "$uname" "$drv_dir"; then
         return 0
@@ -299,7 +298,7 @@ check_and_install_driver_package() {
         fi
     fi
 
-    # 3. Lokales .deb bereits gecacht (z.B. von frueherer Installation)?
+    # 3. Lokales .deb bereits gecacht?
     if DRIVER_DEB=$(ls -1 "$DRV_DIR"/*.deb 2>/dev/null | sort -V | tail -1); then
         log "Installiere gecachtes WiFi-Treiber-Paket: $(basename "$DRIVER_DEB")"
         dpkg -i "$DRIVER_DEB" >/dev/null 2>&1 || {
@@ -349,11 +348,6 @@ if [[ "${EUID}" -ne 0 ]]; then
     exit 1
 fi
 
-if ! command -v apt-get >/dev/null 2>&1; then
-    log "apt-get ist nicht verfuegbar."
-    exit 1
-fi
-
 if ! command -v curl >/dev/null 2>&1; then
     log "curl ist nicht verfuegbar – wird benoetigt fuer GitHub-Download."
     exit 1
@@ -361,15 +355,16 @@ fi
 
 log "Installer-Version: ${SCRIPT_VERSION}"
 log "Kernel: $(uname -r)"
+log "apt-get: ${APT_GET}"
 report_kernel_wireless_support
 
 log "Aktualisiere Paketlisten..."
-apt-get update >/dev/null 2>&1 || {
-    log "Warnung: apt-get update fehlgeschlagen (dpkg gesperrt?)"
+$APT_GET update >/dev/null 2>&1 || {
+    log "Warnung: apt-get update fehlgeschlagen."
 }
 
 log "Installiere WiFi-Basis-Pakete (firmware, tools)..."
-apt-get install -y --no-install-recommends "${PACKAGES[@]}" >/dev/null 2>&1 || {
+$APT_GET install -y --no-install-recommends "${PACKAGES[@]}" >/dev/null 2>&1 || {
     log "Warnung: Einige Basis-Pakete konnten nicht installiert werden."
 }
 
@@ -379,9 +374,7 @@ if ! check_and_install_driver_package "${1:-}"; then
     log "Moegliche Loesungen:"
     log "1. Manueller Pfad: .deb-Datei ueber die Plugin-Oberflaeche angeben"
     log "2. Lokal bereitstellen: .deb unter $DRV_PLG_DIR/\$(uname -r)/ ablegen"
-    log "3. GitHub-Quellen: ${GITHUB_REPO_PRIMARY} oder ${GITHUB_REPO_FALLBACK}"
-    log "   -> Kernel-spezifisches WiFi-Modul-.deb muss im 'latest' Release vorhanden sein"
-    log "4. Einkompiliert: Treiber-Module koennen auch direkt im Kernel enthalten sein"
+    log "3. Warten bis ich777/Mainfrezzer ein Modul-Paket veroeffentlichen"
     log ""
     log "Kontaktiere den Administrator fuer Unterstuetzung."
     exit 1
