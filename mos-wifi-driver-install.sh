@@ -2,18 +2,12 @@
 
 set -euo pipefail
 
-export DEBIAN_FRONTEND=noninteractive
+SCRIPT_VERSION="2026-06-12e"
 
-SCRIPT_VERSION="2026-06-12c"
+# GitHub-Quelle für WiFi-Treiber/Firmware-Pakete
+GITHUB_REPO="ich777/mos-addon-drivers"
 
-# Base packages
-PACKAGES=(
-    wireless-regdb
-    iw
-    wpasupplicant
-)
-
-# Expected kernel modules (loaded after driver package install)
+# Kernel-Module die nach der Paket-Installation geladen werden
 MODULES=(
     cfg80211
     mac80211
@@ -22,205 +16,89 @@ MODULES=(
     rtw88_usb
     rtw88_8822bu
     rtw88_8821cu
-    ath9k
+    ath9k_htc
+    mt7601u
+    mt76x0u
+    mt76x2u
+    mt7921u
     iwlwifi
 )
 
-# Plugin/Driver configuration
 PLG_NAME="mos-wifi-driver"
 DRV_PLG_DIR="/boot/optional/drivers/$PLG_NAME"
-DRIVER_PKG="mos-wifi-modules"
-
-# GitHub source for WiFi module packages
-# Primary:  Mainfrezzer/mos-kernel (custom MOS kernel fork with WiFi support)
-# Fallback: ich777/mos-kernel (upstream, once WiFi modules are added there)
-GITHUB_REPO_PRIMARY="Mainfrezzer/mos-kernel"
-GITHUB_REPO_FALLBACK="ich777/mos-kernel"
-
-# MOS wraps /usr/bin/apt-get with an interactive confirmation prompt.
-# For non-interactive use (postinst, mos_start, etc.) we call the original binary directly.
-if [[ -x "/usr/bin/apt-get.orig" ]]; then
-    APT_GET="/usr/bin/apt-get.orig"
-elif command -v apt-get >/dev/null 2>&1; then
-    APT_GET="apt-get"
-else
-    echo "[mos-wifi] apt-get ist nicht verfuegbar."
-    exit 1
-fi
 
 log() {
     echo "[mos-wifi] $*"
 }
 
-report_wifi_interfaces() {
-    local wlan_ifaces
-    wlan_ifaces="$(ip -o link show 2>/dev/null | awk -F': ' '/^[0-9]+: wl/{print $2}')"
-    if [[ -n "${wlan_ifaces}" ]]; then
-        log "WLAN-Interface(s) erkannt: ${wlan_ifaces//$'\n'/, }"
-        return
-    fi
-    log "Kein WLAN-Interface (wl*) erkannt."
-    log "Hinweis: Der Adapter ist evtl. sichtbar, aber ohne passenden Kernel-Treiber gebunden."
-}
-
 report_kernel_wireless_support() {
-    local kernel_dir module_count cfg_count search_dirs=() dir
-    kernel_dir="/lib/modules/$(uname -r)"
-
-    if [[ ! -d "${kernel_dir}" ]]; then
-        log "Kernel-Modulverzeichnis fehlt: ${kernel_dir}"
-        return
-    fi
-
-    for dir in \
-        "${kernel_dir}/kernel/net/wireless" \
-        "${kernel_dir}/kernel/net/mac80211" \
-        "${kernel_dir}/kernel/drivers/net/wireless"; do
-        [[ -d "${dir}" ]] && search_dirs+=("${dir}")
-    done
-
-    if [[ "${#search_dirs[@]}" -eq 0 ]]; then
-        log "Keine WLAN-Kernelmodulpfade gefunden (net/wireless, net/mac80211, drivers/net/wireless)."
-        log "Hinweis: Dieser MOS-Kernel enthaelt vermutlich keine passenden WLAN-USB-Treiber."
-        return
-    fi
-
-    module_count="$(find "${search_dirs[@]}" -type f \( -name '*.ko' -o -name '*.ko.xz' -o -name '*.ko.zst' \) 2>/dev/null | wc -l | tr -d ' ')"
-
-    if [[ "${module_count:-0}" -eq 0 ]]; then
-        log "Keine ladbaren WLAN-Kernelmodule in den Kernel-Pfaden gefunden."
-        log "Hinweis: Dieser MOS-Kernel enthaelt vermutlich keine passenden WLAN-USB-Treiber."
-        return
-    fi
-
-    cfg_count="0"
-    if [[ -d "${kernel_dir}/kernel/net/wireless" ]]; then
-        cfg_count="$(find "${kernel_dir}/kernel/net/wireless" -type f -name 'cfg80211*.ko*' 2>/dev/null | wc -l | tr -d ' ')"
-    fi
-
-    log "Kernel-WLAN-Module gefunden: ${module_count}"
-    if [[ "${cfg_count:-0}" -eq 0 ]]; then
-        log "Hinweis: cfg80211-Moduldatei nicht gefunden (kann auch einkompiliert sein)."
-    fi
-}
-
-detect_usb_wifi_adapter_status() {
-    if ! command -v usb-devices >/dev/null 2>&1; then
-        return
-    fi
-
-    local unbound_count
-    unbound_count="$({
-        usb-devices | awk '
-        BEGIN { RS=""; FS="\n"; count=0 }
-        {
-            product=""
-            unbound=0
-            for (i=1; i<=NF; i++) {
-                if ($i ~ /^S:[[:space:]]+Product=/) {
-                    product = substr($i, index($i, "=") + 1)
-                }
-                if ($i ~ /^I:[[:space:]]/ && $i ~ /Driver=\(none\)/) {
-                    unbound=1
-                }
-            }
-            if (unbound && product ~ /(WLAN|Wireless|802\.11|Wi-?Fi)/) {
-                count++
-            }
-        }
-        END { print count }
-        '
-    } 2>/dev/null)"
-
-    if [[ "${unbound_count:-0}" -gt 0 ]]; then
-        log "USB-WLAN-Adapter erkannt, aber ohne gebundenen Kernel-Treiber."
-        log "Hinweis: Je nach Chipsatz ist ggf. ein zusaetzlicher Treiber noetig."
-    fi
-}
-
-check_modules_already_installed() {
-    for module in cfg80211 mac80211; do
-        if modinfo "$module" >/dev/null 2>&1; then
-            log "WLAN-Kernelmodule bereits vorhanden (einkompiliert oder installiert)."
-            return 0
+    for mod in cfg80211 mac80211; do
+        if modinfo "$mod" >/dev/null 2>&1; then
+            log "Built-in OK: ${mod}"
+        else
+            log "Warnung: ${mod} nicht gefunden – falscher Kernel?"
         fi
     done
-    return 1
 }
 
-_find_deb_url_in_release() {
-    local release_json="$1"
-    local uname="$2"
+# Sucht im mos-addon-drivers Repo nach dem passenden wifi-Paket.
+# Namensschema: wifi_<kernelversion>-1+mos_amd64.deb
+# Strategie:
+#   1. Release-Tag exakt = uname -r  (z.B. "6.18.36-mos")
+#   2. Neuestes Release mit passendem wifi-Asset
+download_and_install_wifi_package() {
+    local uname="$1"
+    local drv_dir="$DRV_PLG_DIR/$uname"
 
+    # Kernel-Basisversion (z.B. "6.18.36" aus "6.18.36-mos")
     local base_ver
     base_ver="$(echo "$uname" | grep -oP '^\d+\.\d+\.\d+')"
 
-    local all_debs
-    all_debs="$(echo "$release_json" | \
-        grep -o '"browser_download_url": *"[^"]*\.deb"' | \
-        grep -o 'https://[^"]*')"
+    log "Suche WiFi-Paket fuer Kernel ${uname} in ${GITHUB_REPO}..."
 
-    if [[ -z "$all_debs" ]]; then
-        return 1
-    fi
-
-    # Prioritaet 1: Exakter uname -r Match + wifi/modules im Namen
-    local exact_match
-    exact_match="$(echo "$all_debs" | grep -F "${uname}" | grep -i 'wifi\|wireless\|wlan\|modules' | head -1)"
-    if [[ -n "$exact_match" ]]; then
-        echo "$exact_match"
-        return 0
-    fi
-
-    # Prioritaet 2: Kernel-Basisversion Match + wifi/modules im Namen
-    if [[ -n "$base_ver" ]]; then
-        local ver_match
-        ver_match="$(echo "$all_debs" | grep -F "${base_ver}" | grep -i 'wifi\|wireless\|wlan\|modules' | head -1)"
-        if [[ -n "$ver_match" ]]; then
-            echo "$ver_match"
-            return 0
-        fi
-    fi
-
-    # Prioritaet 3: Irgendein .deb mit wifi/wireless/wlan/modules im Namen
-    local generic_match
-    generic_match="$(echo "$all_debs" | grep -i 'wifi\|wireless\|wlan\|modules' | head -1)"
-    if [[ -n "$generic_match" ]]; then
-        log "Warnung: Kein versionsspezifischer Treiber gefunden, verwende generisches Paket."
-        echo "$generic_match"
-        return 0
-    fi
-
-    return 1
-}
-
-_download_and_install_from_repo() {
-    local repo="$1"
-    local uname="$2"
-    local drv_dir="$3"
-
-    local api_url="https://api.github.com/repos/${repo}/releases/latest"
-    log "Pruefe GitHub Releases: ${repo}..."
-
-    local release_json
-    release_json="$(curl -fsSL --connect-timeout 10 --max-time 30 "$api_url" 2>/dev/null)" || {
-        log "GitHub API nicht erreichbar: ${repo}"
+    # Alle Releases durchsuchen (nicht nur latest – Kernel-Version muss matchen)
+    local releases_json
+    releases_json="$(curl -fsSL --connect-timeout 10 --max-time 30 \
+        "https://api.github.com/repos/${GITHUB_REPO}/releases" 2>/dev/null)" || {
+        log "FEHLER: GitHub API nicht erreichbar."
         return 1
     }
 
-    if ! echo "$release_json" | grep -q '"tag_name"'; then
-        log "Kein gueltiges Release gefunden in: ${repo}"
+    if ! echo "$releases_json" | grep -q '"tag_name"'; then
+        log "FEHLER: Keine Releases gefunden in ${GITHUB_REPO}."
         return 1
     fi
 
-    local release_tag
-    release_tag="$(echo "$release_json" | grep -o '"tag_name": *"[^"]*"' | grep -o '"[^"]*"$' | tr -d '"')"
-    log "Gefundenes Release: ${release_tag}"
-
+    # Asset-URL suchen: erst exakter uname-r-Match, dann Basisversion-Match
     local deb_url
-    if ! deb_url="$(_find_deb_url_in_release "$release_json" "$uname")"; then
-        log "Kein passendes WiFi-Modul-.deb fuer Kernel ${uname} in Release ${release_tag}."
-        log "Hinweis: Das Modul-Paket fuer diesen Kernel ist noch nicht veroeffentlicht."
+    deb_url="$(echo "$releases_json" | python3 -c "
+import json, sys
+releases = json.load(sys.stdin)
+uname = '${uname}'
+base_ver = '${base_ver}'
+result = ''
+
+for release in releases:
+    for asset in release.get('assets', []):
+        name = asset['name']
+        if not name.startswith('wifi_') or not name.endswith('.deb'):
+            continue
+        # Prioritaet 1: exakter uname-Match im Dateinamen
+        if uname in name:
+            result = asset['browser_download_url']
+            break
+        # Prioritaet 2: Basisversion-Match
+        if base_ver and base_ver in name and not result:
+            result = asset['browser_download_url']
+    if result and uname in result:
+        break
+
+print(result)
+" 2>/dev/null)"
+
+    if [[ -z "$deb_url" ]]; then
+        log "FEHLER: Kein WiFi-Paket fuer Kernel ${uname} gefunden."
+        log "Verfuegbar unter: https://github.com/${GITHUB_REPO}/releases"
         return 1
     fi
 
@@ -228,17 +106,42 @@ _download_and_install_from_repo() {
     deb_filename="$(basename "$deb_url")"
     local deb_path="${drv_dir}/${deb_filename}"
 
+    # MD5-Prüfung wenn .md5-Datei vorhanden
+    local md5_url="${deb_url}.md5"
+    local expected_md5=""
+
     mkdir -p "$drv_dir"
-    log "Lade herunter: ${deb_filename}"
-    if ! curl -fsSL --connect-timeout 10 --max-time 120 -o "$deb_path" "$deb_url"; then
-        log "Download fehlgeschlagen: ${deb_url}"
-        rm -f "$deb_path"
-        return 1
+
+    # Bereits gecacht?
+    if [[ -f "$deb_path" ]]; then
+        log "Gecachtes Paket gefunden: ${deb_filename}"
+    else
+        log "Lade herunter: ${deb_filename}"
+        if ! curl -fsSL --connect-timeout 10 --max-time 180 \
+                -o "$deb_path" "$deb_url"; then
+            log "FEHLER: Download fehlgeschlagen."
+            rm -f "$deb_path"
+            return 1
+        fi
+
+        # MD5 prüfen
+        expected_md5="$(curl -fsSL --connect-timeout 10 --max-time 10 \
+            "$md5_url" 2>/dev/null | awk '{print $1}')"
+        if [[ -n "$expected_md5" ]]; then
+            local actual_md5
+            actual_md5="$(md5sum "$deb_path" | awk '{print $1}')"
+            if [[ "$expected_md5" != "$actual_md5" ]]; then
+                log "FEHLER: MD5-Prüfung fehlgeschlagen – Datei beschädigt."
+                rm -f "$deb_path"
+                return 1
+            fi
+            log "MD5 OK: ${actual_md5}"
+        fi
     fi
 
     log "Installiere: ${deb_filename}"
     if ! dpkg -i "$deb_path" >/dev/null 2>&1; then
-        log "FEHLER: dpkg -i fehlgeschlagen fuer ${deb_filename}"
+        log "FEHLER: dpkg -i fehlgeschlagen."
         rm -f "$deb_path"
         return 1
     fi
@@ -247,98 +150,58 @@ _download_and_install_from_repo() {
     udevadm trigger >/dev/null 2>&1 || true
     udevadm settle --timeout=15 >/dev/null 2>&1 || true
 
-    log "WiFi-Treiber-Paket erfolgreich installiert: ${deb_filename}"
+    log "WiFi-Paket erfolgreich installiert: ${deb_filename}"
     return 0
 }
 
-download_driver_deb() {
+check_wifi_package_installed() {
+    # Prüfen ob das wifi-Paket bereits für diesen Kernel installiert ist
     local uname="$1"
-    local drv_dir="$DRV_PLG_DIR/$uname"
-
-    if _download_and_install_from_repo "$GITHUB_REPO_PRIMARY" "$uname" "$drv_dir"; then
+    if dpkg -l "wifi" 2>/dev/null | grep -q "^ii"; then
+        log "WiFi-Paket bereits installiert."
         return 0
     fi
-
-    log "Primaerquelle nicht verfuegbar, versuche Fallback: ${GITHUB_REPO_FALLBACK}..."
-    if _download_and_install_from_repo "$GITHUB_REPO_FALLBACK" "$uname" "$drv_dir"; then
-        return 0
+    # Fallback: gecachtes .deb prüfen
+    if ls -1 "$DRV_PLG_DIR/$uname"/wifi_*.deb >/dev/null 2>&1; then
+        return 1  # vorhanden aber evtl. nicht installiert
     fi
-
-    return 1
-}
-
-check_and_install_driver_package() {
-    local CUSTOM_PATH="${1:-}"
-    local UNAME DRV_DIR DRIVER_DEB
-
-    UNAME="$(uname -r)"
-    DRV_DIR="$DRV_PLG_DIR/$UNAME"
-
-    # 1. Module bereits vorhanden?
-    if check_modules_already_installed; then
-        return 0
-    fi
-
-    # 2. Expliziter Pfad uebergeben?
-    if [[ -n "$CUSTOM_PATH" ]]; then
-        if [[ -f "$CUSTOM_PATH" ]]; then
-            log "Installiere WiFi-Treiber-Paket von: $CUSTOM_PATH"
-            dpkg -i "$CUSTOM_PATH" >/dev/null 2>&1 || {
-                log "FEHLER: Treiber-Paket-Installation fehlgeschlagen."
-                return 1
-            }
-            depmod --all >/dev/null 2>&1 || true
-            udevadm trigger >/dev/null 2>&1 || true
-            udevadm settle --timeout=15 >/dev/null 2>&1 || true
-            log "Treiber-Paket erfolgreich installiert."
-            return 0
-        else
-            log "FEHLER: Datei nicht gefunden: $CUSTOM_PATH"
-            return 1
-        fi
-    fi
-
-    # 3. Lokales .deb bereits gecacht?
-    if DRIVER_DEB=$(ls -1 "$DRV_DIR"/*.deb 2>/dev/null | sort -V | tail -1); then
-        log "Installiere gecachtes WiFi-Treiber-Paket: $(basename "$DRIVER_DEB")"
-        dpkg -i "$DRIVER_DEB" >/dev/null 2>&1 || {
-            log "FEHLER: Treiber-Paket-Installation fehlgeschlagen."
-            return 1
-        }
-        depmod --all >/dev/null 2>&1 || true
-        udevadm trigger >/dev/null 2>&1 || true
-        udevadm settle --timeout=15 >/dev/null 2>&1 || true
-        log "Treiber-Paket erfolgreich installiert."
-        return 0
-    fi
-
-    # 4. Von GitHub herunterladen
-    log "Versuche, WiFi-Treiber-Paket von GitHub herunterzuladen..."
-    if download_driver_deb "$UNAME"; then
-        return 0
-    fi
-
-    log "FEHLER: Kein WiFi-Treiber-Paket verfuegbar."
     return 1
 }
 
 load_kernel_modules() {
     if ! command -v modprobe >/dev/null 2>&1; then
-        return
-    fi
-
-    local KERNEL_MODULE_DIR="/lib/modules/$(uname -r)"
-    if [[ ! -d "$KERNEL_MODULE_DIR" ]]; then
-        log "Kernel-Modulverzeichnis nicht gefunden ($KERNEL_MODULE_DIR)"
+        log "modprobe nicht verfuegbar."
         return
     fi
 
     log "Lade WLAN-Kernelmodule..."
+    local loaded=0
     for module in "${MODULES[@]}"; do
         if modinfo "$module" >/dev/null 2>&1; then
-            modprobe "$module" 2>/dev/null || log "Warnung: Modul $module konnte nicht geladen werden"
+            if modprobe "$module" 2>/dev/null; then
+                log "Geladen: ${module}"
+                (( loaded++ )) || true
+            else
+                log "Warnung: ${module} konnte nicht geladen werden."
+            fi
         fi
     done
+
+    if [[ "$loaded" -eq 0 ]]; then
+        log "Keine Module geladen – Treiber-Paket noch nicht installiert?"
+    else
+        log "${loaded} Modul(e) geladen."
+    fi
+}
+
+report_wifi_interfaces() {
+    local wlan_ifaces
+    wlan_ifaces="$(ip -o link show 2>/dev/null | awk -F': ' '/^[0-9]+: wl/{print $2}')"
+    if [[ -n "${wlan_ifaces}" ]]; then
+        log "WLAN-Interface(s) erkannt: ${wlan_ifaces//$'\n'/, }"
+    else
+        log "Kein WLAN-Interface (wl*) erkannt."
+    fi
 }
 
 # ── Hauptprogramm ─────────────────────────────────────────────────────────────
@@ -349,38 +212,25 @@ if [[ "${EUID}" -ne 0 ]]; then
 fi
 
 if ! command -v curl >/dev/null 2>&1; then
-    log "curl ist nicht verfuegbar – wird benoetigt fuer GitHub-Download."
+    log "FEHLER: curl nicht verfuegbar."
     exit 1
 fi
 
+UNAME="$(uname -r)"
 log "Installer-Version: ${SCRIPT_VERSION}"
-log "Kernel: $(uname -r)"
-log "apt-get: ${APT_GET}"
+log "Kernel: ${UNAME}"
+
 report_kernel_wireless_support
 
-log "Aktualisiere Paketlisten..."
-$APT_GET update >/dev/null 2>&1 || {
-    log "Warnung: apt-get update fehlgeschlagen."
-}
-
-log "Installiere WiFi-Basis-Pakete (firmware, tools)..."
-$APT_GET install -y --no-install-recommends "${PACKAGES[@]}" >/dev/null 2>&1 || {
-    log "Warnung: Einige Basis-Pakete konnten nicht installiert werden."
-}
-
-if ! check_and_install_driver_package "${1:-}"; then
-    log "FEHLER: WLAN-Treiber nicht verfuegbar."
-    log ""
-    log "Moegliche Loesungen:"
-    log "1. Manueller Pfad: .deb-Datei ueber die Plugin-Oberflaeche angeben"
-    log "2. Lokal bereitstellen: .deb unter $DRV_PLG_DIR/\$(uname -r)/ ablegen"
-    log "3. Warten bis ich777/Mainfrezzer ein Modul-Paket veroeffentlichen"
-    log ""
-    log "Kontaktiere den Administrator fuer Unterstuetzung."
-    exit 1
+if ! check_wifi_package_installed "$UNAME"; then
+    if ! download_and_install_wifi_package "$UNAME"; then
+        log ""
+        log "WiFi-Treiber konnten nicht installiert werden."
+        log "Paket-Quelle: https://github.com/${GITHUB_REPO}/releases"
+        exit 1
+    fi
 fi
 
-detect_usb_wifi_adapter_status
 load_kernel_modules
 report_wifi_interfaces
 
