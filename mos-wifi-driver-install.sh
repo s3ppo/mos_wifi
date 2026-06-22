@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-SCRIPT_VERSION="2026-06-12f"
+SCRIPT_VERSION="2026-06-12g"
 
 GITHUB_REPO="ich777/mos-addon-drivers"
 
@@ -39,62 +39,53 @@ report_kernel_wireless_support() {
     done
 }
 
+# URL direkt aus Kernel-Version konstruieren – kein API-Call nötig.
+# Namensschema: wifi_<base>-1+mos_amd64.deb
+# Release-Tag:  <uname -r>  (z.B. 6.18.36-mos)
+# Beispiel:     wifi_6.18.36-1+mos_amd64.deb
+build_deb_url() {
+    local uname="$1"
+    local base_ver
+    base_ver="$(echo "$uname" | grep -oP '^\d+\.\d+\.\d+')"
+    local tag="${uname}"
+    local filename="wifi_${base_ver}-1+mos_amd64.deb"
+    # + muss als %2B URL-encoded werden
+    local filename_encoded="wifi_${base_ver}-1%2Bmos_amd64.deb"
+    echo "https://github.com/${GITHUB_REPO}/releases/download/${tag}/${filename_encoded}"
+}
+
+check_wifi_package_installed() {
+    # Paketname ist "wifi-driver"
+    if dpkg -l "wifi-driver" 2>/dev/null | grep -q "^ii"; then
+        log "WiFi-Paket bereits installiert (wifi-driver)."
+        return 0
+    fi
+    return 1
+}
+
 download_and_install_wifi_package() {
     local uname="$1"
     local drv_dir="$DRV_PLG_DIR/$uname"
-
-    log "Suche WiFi-Paket fuer Kernel ${uname} in ${GITHUB_REPO}..."
-
-    local releases_json
-    releases_json="$(curl -fsSL --connect-timeout 10 --max-time 30 \
-        "https://api.github.com/repos/${GITHUB_REPO}/releases" 2>/dev/null)" || {
-        log "FEHLER: GitHub API nicht erreichbar."
-        return 1
-    }
-
-    if ! echo "$releases_json" | grep -q '"tag_name"'; then
-        log "FEHLER: Keine Releases gefunden in ${GITHUB_REPO}."
-        return 1
-    fi
-
-    # Python erhält uname als Argument – keine Shell-Interpolation im Python-String
+    local base_ver
+    base_ver="$(echo "$uname" | grep -oP '^\d+\.\d+\.\d+')"
+    local deb_filename="wifi_${base_ver}-1+mos_amd64.deb"
     local deb_url
-    deb_url="$(echo "$releases_json" | python3 -c "
-import json, sys
-releases = json.load(sys.stdin)
-uname = sys.argv[1]
-base_ver = '.'.join(uname.split('.')[:3]).split('-')[0]
-for release in releases:
-    for asset in release.get('assets', []):
-        name = asset['name']
-        if name.startswith('wifi_') and name.endswith('.deb'):
-            if uname in name or base_ver in name:
-                print(asset['browser_download_url'])
-                sys.exit(0)
-" "$uname" 2>/dev/null)"
-
-    if [[ -z "$deb_url" ]]; then
-        log "FEHLER: Kein WiFi-Paket fuer Kernel ${uname} gefunden."
-        log "Verfuegbar unter: https://github.com/${GITHUB_REPO}/releases"
-        return 1
-    fi
-
-    local deb_filename
-    deb_filename="$(basename "$deb_url" | python3 -c "
-import sys, urllib.parse
-print(urllib.parse.unquote(sys.stdin.read().strip()))
-")"
+    deb_url="$(build_deb_url "$uname")"
     local deb_path="${drv_dir}/${deb_filename}"
+
+    log "WiFi-Paket: ${deb_filename}"
+    log "Quelle: https://github.com/${GITHUB_REPO}/releases/tag/${uname}"
 
     mkdir -p "$drv_dir"
 
     if [[ -f "$deb_path" ]]; then
         log "Gecachtes Paket gefunden: ${deb_filename}"
     else
-        log "Lade herunter: ${deb_filename}"
+        log "Lade herunter..."
         if ! curl -fsSL --connect-timeout 10 --max-time 180 \
                 -o "$deb_path" "$deb_url"; then
             log "FEHLER: Download fehlgeschlagen."
+            log "URL: ${deb_url}"
             rm -f "$deb_path"
             return 1
         fi
@@ -131,14 +122,6 @@ print(urllib.parse.unquote(sys.stdin.read().strip()))
     return 0
 }
 
-check_wifi_package_installed() {
-    if dpkg -l "wifi" 2>/dev/null | grep -q "^ii"; then
-        log "WiFi-Paket bereits installiert."
-        return 0
-    fi
-    return 1
-}
-
 load_kernel_modules() {
     if ! command -v modprobe >/dev/null 2>&1; then
         log "modprobe nicht verfuegbar."
@@ -159,7 +142,7 @@ load_kernel_modules() {
     done
 
     if [[ "$loaded" -eq 0 ]]; then
-        log "Keine Module geladen – Treiber-Paket noch nicht installiert?"
+        log "Keine Module geladen – Treiber-Paket nicht installiert?"
     else
         log "${loaded} Modul(e) geladen."
     fi
@@ -196,7 +179,6 @@ report_kernel_wireless_support
 if ! check_wifi_package_installed; then
     if ! download_and_install_wifi_package "$UNAME"; then
         log "WiFi-Treiber konnten nicht installiert werden."
-        log "Paket-Quelle: https://github.com/${GITHUB_REPO}/releases"
         exit 1
     fi
 fi
