@@ -2,12 +2,10 @@
 
 set -euo pipefail
 
-SCRIPT_VERSION="2026-06-12e"
+SCRIPT_VERSION="2026-06-12f"
 
-# GitHub-Quelle für WiFi-Treiber/Firmware-Pakete
 GITHUB_REPO="ich777/mos-addon-drivers"
 
-# Kernel-Module die nach der Paket-Installation geladen werden
 MODULES=(
     cfg80211
     mac80211
@@ -41,22 +39,12 @@ report_kernel_wireless_support() {
     done
 }
 
-# Sucht im mos-addon-drivers Repo nach dem passenden wifi-Paket.
-# Namensschema: wifi_<kernelversion>-1+mos_amd64.deb
-# Strategie:
-#   1. Release-Tag exakt = uname -r  (z.B. "6.18.36-mos")
-#   2. Neuestes Release mit passendem wifi-Asset
 download_and_install_wifi_package() {
     local uname="$1"
     local drv_dir="$DRV_PLG_DIR/$uname"
 
-    # Kernel-Basisversion (z.B. "6.18.36" aus "6.18.36-mos")
-    local base_ver
-    base_ver="$(echo "$uname" | grep -oP '^\d+\.\d+\.\d+')"
-
     log "Suche WiFi-Paket fuer Kernel ${uname} in ${GITHUB_REPO}..."
 
-    # Alle Releases durchsuchen (nicht nur latest – Kernel-Version muss matchen)
     local releases_json
     releases_json="$(curl -fsSL --connect-timeout 10 --max-time 30 \
         "https://api.github.com/repos/${GITHUB_REPO}/releases" 2>/dev/null)" || {
@@ -69,32 +57,21 @@ download_and_install_wifi_package() {
         return 1
     fi
 
-    # Asset-URL suchen: erst exakter uname-r-Match, dann Basisversion-Match
+    # Python erhält uname als Argument – keine Shell-Interpolation im Python-String
     local deb_url
     deb_url="$(echo "$releases_json" | python3 -c "
 import json, sys
 releases = json.load(sys.stdin)
-uname = '${uname}'
-base_ver = '${base_ver}'
-result = ''
-
+uname = sys.argv[1]
+base_ver = '.'.join(uname.split('.')[:3]).split('-')[0]
 for release in releases:
     for asset in release.get('assets', []):
         name = asset['name']
-        if not name.startswith('wifi_') or not name.endswith('.deb'):
-            continue
-        # Prioritaet 1: exakter uname-Match im Dateinamen
-        if uname in name:
-            result = asset['browser_download_url']
-            break
-        # Prioritaet 2: Basisversion-Match
-        if base_ver and base_ver in name and not result:
-            result = asset['browser_download_url']
-    if result and uname in result:
-        break
-
-print(result)
-" 2>/dev/null)"
+        if name.startswith('wifi_') and name.endswith('.deb'):
+            if uname in name or base_ver in name:
+                print(asset['browser_download_url'])
+                sys.exit(0)
+" "$uname" 2>/dev/null)"
 
     if [[ -z "$deb_url" ]]; then
         log "FEHLER: Kein WiFi-Paket fuer Kernel ${uname} gefunden."
@@ -103,16 +80,14 @@ print(result)
     fi
 
     local deb_filename
-    deb_filename="$(basename "$deb_url")"
+    deb_filename="$(basename "$deb_url" | python3 -c "
+import sys, urllib.parse
+print(urllib.parse.unquote(sys.stdin.read().strip()))
+")"
     local deb_path="${drv_dir}/${deb_filename}"
-
-    # MD5-Prüfung wenn .md5-Datei vorhanden
-    local md5_url="${deb_url}.md5"
-    local expected_md5=""
 
     mkdir -p "$drv_dir"
 
-    # Bereits gecacht?
     if [[ -f "$deb_path" ]]; then
         log "Gecachtes Paket gefunden: ${deb_filename}"
     else
@@ -124,7 +99,9 @@ print(result)
             return 1
         fi
 
-        # MD5 prüfen
+        # MD5 prüfen falls verfügbar
+        local md5_url="${deb_url}.md5"
+        local expected_md5
         expected_md5="$(curl -fsSL --connect-timeout 10 --max-time 10 \
             "$md5_url" 2>/dev/null | awk '{print $1}')"
         if [[ -n "$expected_md5" ]]; then
@@ -155,15 +132,9 @@ print(result)
 }
 
 check_wifi_package_installed() {
-    # Prüfen ob das wifi-Paket bereits für diesen Kernel installiert ist
-    local uname="$1"
     if dpkg -l "wifi" 2>/dev/null | grep -q "^ii"; then
         log "WiFi-Paket bereits installiert."
         return 0
-    fi
-    # Fallback: gecachtes .deb prüfen
-    if ls -1 "$DRV_PLG_DIR/$uname"/wifi_*.deb >/dev/null 2>&1; then
-        return 1  # vorhanden aber evtl. nicht installiert
     fi
     return 1
 }
@@ -222,9 +193,8 @@ log "Kernel: ${UNAME}"
 
 report_kernel_wireless_support
 
-if ! check_wifi_package_installed "$UNAME"; then
+if ! check_wifi_package_installed; then
     if ! download_and_install_wifi_package "$UNAME"; then
-        log ""
         log "WiFi-Treiber konnten nicht installiert werden."
         log "Paket-Quelle: https://github.com/${GITHUB_REPO}/releases"
         exit 1
