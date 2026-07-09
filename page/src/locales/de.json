@@ -1,42 +1,52 @@
 {
   "plugin_wifi": {
     "title": "WiFi Treiber",
-    "description": "Installiert WLAN-Treiber und Kernel-Module für MOS. Die Treiber-Pakete werden automatisch von GitHub heruntergeladen und für den aktuellen Kernel eingerichtet.",
+    "description": "Installiert WLAN-Firmware und lädt Kernel-Module für MOS. Die WLAN-Module sind bereits im MOS-Kernel enthalten – dieses Plugin stellt die benötigte Firmware bereit.",
+
     "installation": "Treiber-Installation",
     "install": "Treiber installieren",
     "install_failed": "Installation fehlgeschlagen.",
     "install_complete": "Installation abgeschlossen.",
-    "deb_path_label": "Pfad zur Treiber-.deb-Datei (optional)",
+
+    "deb_path_label": "Pfad zur Firmware-.deb-Datei (optional)",
     "deb_path_hint": "Optionaler Pfad zu einer lokalen .deb-Datei. Wenn leer, wird das Paket automatisch von GitHub heruntergeladen.",
-    "deb_path_field_hint": "Beispiel: /boot/optional/drivers/mos-wifi-driver/$(uname -r)/mos-wifi-modules.deb",
-    "auto_download_hint": "Kein Pfad angegeben – das Treiber-Paket wird automatisch von GitHub (Mainfrezzer/mos-kernel) heruntergeladen.",
+    "deb_path_field_hint": "Beispiel: /boot/optional/drivers/mos-wifi-driver/$(uname -r)/wifi_*.deb",
+
+    "auto_download_hint": "Kein Pfad angegeben – das Firmware-Paket wird automatisch von GitHub (mos-nas/mos-addon-drivers) heruntergeladen.",
+
     "stage_init": "Initialisierung...",
     "stage_apt": "Paketlisten werden aktualisiert...",
-    "stage_download": "Treiber-Paket wird von GitHub heruntergeladen...",
-    "stage_install": "Treiber werden installiert...",
+    "stage_download": "Firmware-Paket wird von GitHub heruntergeladen...",
+    "stage_install": "Firmware wird installiert...",
     "stage_modules": "Kernel-Module werden geladen...",
     "progress_note": "Der Download kann je nach Verbindung 1–2 Minuten dauern. Bitte warten.",
+
     "running": "Installation läuft...",
     "success": "Installation erfolgreich",
-    "success_subtext": "WLAN-Treiber wurden erfolgreich installiert und geladen.",
+    "success_subtext": "WLAN-Firmware wurde erfolgreich installiert und Module geladen.",
     "failed": "Installation fehlgeschlagen",
-    "failed_subtext": "Kein passendes Treiber-Paket für den aktuellen Kernel gefunden, oder die Installation ist fehlgeschlagen. Details im Log.",
+    "failed_subtext": "Firmware-Paket konnte nicht installiert werden. Details im Log.",
     "timeout_headline": "Zeitüberschreitung nach {seconds} Sekunden",
     "timeout_subtext": "Der Vorgang hat das Zeitlimit überschritten. Prüfe die Netzwerkverbindung oder stelle das Paket lokal bereit.",
+
     "show_log": "Installationsprotokoll anzeigen",
+
     "error_prefix": "Fehler",
     "initial_prompt": "Klicke auf \"Treiber installieren\", um den Vorgang zu starten.",
-    "included_drivers": "Enthaltene Treiber",
-    "driver_intel": "Intel (iwlwifi) – z. B. Intel AX200, AX210",
+
+    "included_drivers": "Unterstützte Treiber",
+    "driver_intel": "Intel (iwlwifi + iwlmvm) – AX200, AX210, CNVi (bald verfügbar)",
     "driver_realtek": "Realtek (rtl8xxxu, rtw88) – z. B. RTL8821CU, RTL8822BU",
-    "driver_atheros": "Atheros/Qualcomm (ath9k) – ältere USB-Adapter",
-    "driver_broadcom": "Basis-Wireless-Stack (cfg80211, mac80211)",
-    "driver_regulatory_database": "Regulatory Database (wireless-regdb)",
+    "driver_atheros": "Atheros/Qualcomm (ath9k_htc) – ältere USB-Adapter",
+    "driver_broadcom": "Basis-Wireless-Stack (cfg80211, mac80211) – Built-in im Kernel",
+    "driver_regulatory_database": "Mediatek (mt7601u, mt76x2u, mt7921u) – z. B. COMFAST CF-953AX",
+
     "information": "Hinweise",
     "installer_runs_at": "Der Installer wird automatisch ausgeführt bei:",
     "plugin_installation": "Plugin-Installation",
     "system_start": "MOS-Systemstart",
     "os_updates": "OS-Updates",
+
     "github_repository": "GitHub Repository",
     "support": "Fehler melden"
   }
